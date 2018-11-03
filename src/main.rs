@@ -7,6 +7,7 @@ use std::io;
 use std::io::Read;
 use std::fs::File;
 use std::str;
+use std::cmp;
 
 fn main() {
 
@@ -37,9 +38,7 @@ fn main() {
         panic!("Could not read file: {}", e);
     });
 
-    for word in &words {
-        println!("{}", word);
-    }
+    println!("Akali / Kalista: {}", overlapping_chars("Akali", "Kalista"));
 }
 
 fn validate_min_overlap(arg: String) -> Result<(), String> {
@@ -76,4 +75,34 @@ fn parse_words_file(path : &str) -> Result<Vec<String>, io::Error> {
         .filter(|s| !s.is_empty())
         .map(ToOwned::to_owned)
         .collect())
+}
+
+fn overlapping_chars(left: &str, right: &str) -> usize {
+
+    let left = left.to_lowercase();
+    let right = right.to_lowercase();
+
+    let mut left = left.chars().as_str();
+    let mut right = right.chars().as_str();
+
+    // This issue should be caught by the file parser:
+    debug_assert!(left.len() > 0 && right.len() > 0);
+
+    let max_overlap = cmp::min(left.len(), right.len()) - 1;
+
+    // trim words to maximum potential overlap
+    left = &left[left.len()-max_overlap..];
+    right = &right[..max_overlap];
+
+    for overlap in (1..=max_overlap).rev() {
+
+        if left == right {
+            return overlap;
+        }
+
+        left = &left[1..];
+        right = &right[..right.len() - 1];
+    };
+
+    0
 }
