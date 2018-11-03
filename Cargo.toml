@@ -1,0 +1,7 @@
+[package]
+name = "wordchain"
+version = "0.1.0"
+authors = ["mweb"]
+
+[dependencies]
+clap = "2.32"
