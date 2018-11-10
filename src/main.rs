@@ -119,8 +119,10 @@ struct WordRating {
     average_match_len: f64
 }
 
+type FollowerMap<'a> = HashMap<&'a str, HashSet<&'a str>>;
+
 // TODO: Figure out if this is the best way to pass generics
-fn sort_words<F>(words: &mut Vec<&str>, sorting_func: F) where
+fn sort_words<F>(words: &mut Vec<&str>, follower_map: FollowerMap, sorting_func: F) where
     F: Fn(&WordRating) -> cmp::Ordering
 {
     // - build or receive follower table
@@ -128,7 +130,7 @@ fn sort_words<F>(words: &mut Vec<&str>, sorting_func: F) where
     // - sort by the provided sorting function
 }
 
-fn create_follower_map(words: &Vec<String>, min_overlap: usize) -> HashMap<&str, HashSet<&str>> {
+fn create_follower_map(words: &Vec<String>, min_overlap: usize) -> FollowerMap {
 
     let mut map = HashMap::new();
 
