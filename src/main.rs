@@ -130,7 +130,9 @@ fn sort_words<F>(words: &mut Vec<&str>, follower_map: FollowerMap, sorting_func:
     // - sort by the provided sorting function
 }
 
-fn create_follower_map(words: &Vec<String>, min_overlap: usize) -> FollowerMap {
+fn create_follower_map<T>(words: &[T], min_overlap: usize) -> FollowerMap where
+    T: AsRef<str>
+{
 
     let mut map = HashMap::new();
 
@@ -138,12 +140,14 @@ fn create_follower_map(words: &Vec<String>, min_overlap: usize) -> FollowerMap {
         let mut followers = HashSet::new();
 
         for right in words {
-            if overlapping_chars(&left, &right) >= min_overlap && left != right {
-                followers.insert(&right[..]);
+            if overlapping_chars(left.as_ref(), right.as_ref()) >= min_overlap
+                && left.as_ref() != right.as_ref() {
+
+                followers.insert(right.as_ref());
             }
         }
 
-        map.insert(&left[..], followers);
+        map.insert(left.as_ref(), followers);
     };
 
     map
