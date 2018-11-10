@@ -42,9 +42,13 @@ fn main() {
 
     let follower_map = create_follower_map(&words, min_overlap);
 
-    for (left, followers) in follower_map {
-        println!("{} is followed by {:?}", left, followers);
-    }
+    let mut sorted_words = words.clone();
+
+    sort_words(&mut sorted_words, &follower_map, |a,b| {
+        a.incoming.cmp(&b.incoming).then(a.outgoing.cmp(&b.outgoing)).reverse()
+    });
+
+    println!("Sorted: {:?}", sorted_words);
 }
 
 fn validate_min_overlap(arg: String) -> Result<(), String> {
@@ -116,18 +120,40 @@ fn overlapping_chars(left: &str, right: &str) -> usize {
 struct WordRating {
     incoming: usize,
     outgoing: usize,
-    average_match_len: f64
+    //average_match_len: f64 TODO: Maybe include this
 }
 
 type FollowerMap<'a> = HashMap<&'a str, HashSet<&'a str>>;
 
 // TODO: Figure out if this is the best way to pass generics
-fn sort_words<F>(words: &mut Vec<&str>, follower_map: FollowerMap, sorting_func: F) where
-    F: Fn(&WordRating) -> cmp::Ordering
+fn sort_words<F,T>(words: &mut Vec<T>, follower_map: &FollowerMap, sorting_func: F) where
+    T: AsRef<str>,
+    F: Fn(&WordRating, &WordRating) -> cmp::Ordering
 {
     // - build or receive follower table
     // - build word rating table
     // - sort by the provided sorting function
+
+    let calc_incoming = |left : &str| {
+        follower_map.iter()
+            .filter(|(_, followers)| followers.contains(left))
+            .count()
+    };
+
+    let ratings = follower_map.iter()
+        .map(|(left, followers)|
+            (*left, WordRating {
+                outgoing: followers.len(),
+                incoming: calc_incoming(left)
+            }))
+        .collect::<HashMap<_,_>>();
+
+    words.sort_unstable_by(|a,b| {
+        let left = ratings.get(a.as_ref()).unwrap();
+        let right = ratings.get(b.as_ref()).unwrap();
+
+        sorting_func(left, right)
+    });
 }
 
 fn create_follower_map<T>(words: &[T], min_overlap: usize) -> FollowerMap where
