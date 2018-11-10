@@ -8,6 +8,8 @@ use std::io::Read;
 use std::fs::File;
 use std::str;
 use std::cmp;
+use std::collections::HashMap;
+use std::collections::HashSet;
 
 fn main() {
 
@@ -33,12 +35,16 @@ fn main() {
 
     let words_file = matches.value_of(ARG_WORD_FILE).unwrap();
 
-    let min_overlap = value_t_or_exit!(matches, ARG_MIN_OVERLAP, u32);
+    let min_overlap = value_t_or_exit!(matches, ARG_MIN_OVERLAP, usize);
     let words = parse_words_file(words_file).unwrap_or_else(|e| {
         panic!("Could not read file: {}", e);
     });
 
-    println!("Akali / Kalista: {}", overlapping_chars("Akali", "Kalista"));
+    let follower_map = create_follower_map(&words, min_overlap);
+
+    for (left, followers) in follower_map {
+        println!("{} is followed by {:?}", left, followers);
+    }
 }
 
 fn validate_min_overlap(arg: String) -> Result<(), String> {
@@ -105,4 +111,38 @@ fn overlapping_chars(left: &str, right: &str) -> usize {
     };
 
     0
+}
+
+struct WordRating {
+    incoming: usize,
+    outgoing: usize,
+    average_match_len: f64
+}
+
+// TODO: Figure out if this is the best way to pass generics
+fn sort_words<F>(words: &mut Vec<&str>, sorting_func: F) where
+    F: Fn(&WordRating) -> cmp::Ordering
+{
+    // - build or receive follower table
+    // - build word rating table
+    // - sort by the provided sorting function
+}
+
+fn create_follower_map(words: &Vec<String>, min_overlap: usize) -> HashMap<&str, HashSet<&str>> {
+
+    let mut map = HashMap::new();
+
+    for left in words {
+        let mut followers = HashSet::new();
+
+        for right in words {
+            if overlapping_chars(&left, &right) >= min_overlap && left != right {
+                followers.insert(&right[..]);
+            }
+        }
+
+        map.insert(&left[..], followers);
+    };
+
+    map
 }
