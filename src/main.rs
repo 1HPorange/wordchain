@@ -40,15 +40,22 @@ fn main() {
         panic!("Could not read file: {}", e);
     });
 
+    if words.len() > 256 {
+        panic!("This algorithm is limited to 256 words. Please remove some words from your file.")
+    }
+
     let follower_map = create_follower_map(&words, min_overlap);
 
-    let mut sorted_words = words.clone();
-
-    sort_words(&mut sorted_words, &follower_map, |a,b| {
-        a.incoming.cmp(&b.incoming).then(a.outgoing.cmp(&b.outgoing)).reverse()
+    let sorted_words = sort_words(words, &follower_map, |a,b| {
+        // Sorts by most incoming first, then most outgoing
+        a.incoming.cmp(&b.incoming)
+            .then(a.outgoing.cmp(&b.outgoing))
+            .reverse()
     });
 
-    println!("Sorted: {:?}", sorted_words);
+    let follower_table = create_follower_table(&sorted_words, &follower_map);
+
+    find_longest_chain(&follower_table, &sorted_words);
 }
 
 fn validate_min_overlap(arg: String) -> Result<(), String> {
@@ -123,11 +130,10 @@ struct WordRating {
     //average_match_len: f64 TODO: Maybe include this
 }
 
-type FollowerMap<'a> = HashMap<&'a str, HashSet<&'a str>>;
+type FollowerMap = HashMap<String, HashSet<String>>;
 
 // TODO: Figure out if this is the best way to pass generics
-fn sort_words<F,T>(words: &mut Vec<T>, follower_map: &FollowerMap, sorting_func: F) where
-    T: AsRef<str>,
+fn sort_words<F>(mut words: Vec<String>, follower_map: &FollowerMap, sorting_func: F) -> Vec<String> where
     F: Fn(&WordRating, &WordRating) -> cmp::Ordering
 {
     // - build or receive follower table
@@ -142,39 +148,143 @@ fn sort_words<F,T>(words: &mut Vec<T>, follower_map: &FollowerMap, sorting_func:
 
     let ratings = follower_map.iter()
         .map(|(left, followers)|
-            (*left, WordRating {
+            (left, WordRating {
                 outgoing: followers.len(),
                 incoming: calc_incoming(left)
             }))
         .collect::<HashMap<_,_>>();
 
     words.sort_unstable_by(|a,b| {
-        let left = ratings.get(a.as_ref()).unwrap();
-        let right = ratings.get(b.as_ref()).unwrap();
+        let left = ratings.get(a).unwrap();
+        let right = ratings.get(b).unwrap();
 
         sorting_func(left, right)
     });
+
+    words
 }
 
-fn create_follower_map<T>(words: &[T], min_overlap: usize) -> FollowerMap where
-    T: AsRef<str>
+fn create_follower_map(words: &Vec<String>, min_overlap: usize) -> FollowerMap
 {
 
-    let mut map = HashMap::new();
+    let mut map = HashMap::with_capacity(words.len());
 
     for left in words {
         let mut followers = HashSet::new();
 
         for right in words {
-            if overlapping_chars(left.as_ref(), right.as_ref()) >= min_overlap
-                && left.as_ref() != right.as_ref() {
+            if overlapping_chars(left, right) >= min_overlap
+                && left != right {
 
-                followers.insert(right.as_ref());
+                followers.insert(right.clone());
             }
         }
 
-        map.insert(left.as_ref(), followers);
+        map.insert(left.clone(), followers);
     };
 
     map
+}
+
+fn create_follower_table(sorted_words: &Vec<String>, follower_map: &FollowerMap) -> Vec<Vec<u8>> {
+
+    let mut table = Vec::with_capacity(sorted_words.len());
+
+    for word in sorted_words {
+
+        let followers = follower_map.get(word).unwrap();
+
+        let mut follower_indices = Vec::with_capacity(followers.len());
+
+        for follower in followers {
+
+            let index = sorted_words
+                .iter()
+                .position(|w| w == follower)
+                .unwrap() as u8;
+
+            follower_indices.push(index);
+        };
+
+        table.push(follower_indices);
+    };
+
+    table
+}
+
+fn find_longest_chain(follower_table: &Vec<Vec<u8>>, TEMP_SORTED_WORDS: &Vec<String>) { // TODO: Remove this param
+
+    // Setup
+    // TODO: Some of this should come from parameters
+
+    let mut chain = Vec::with_capacity(follower_table.len());
+
+    // POSS OPT: Can be one shorter, since the start index is not a follower of anything
+    let mut follower_table_indices = vec![0u8; follower_table.len()];
+
+    // POSS OPT:
+    let mut longest = Vec::new();
+
+    for start_index in 0..follower_table.len() as u8 {
+
+        chain.push(start_index);
+
+        loop {
+            let index = match chain.last() {
+                Some(i) => *i as usize,
+                None => break
+            };
+
+            let followers = &follower_table[index];
+
+            let follower_index = &mut follower_table_indices[index];
+
+            loop {
+                if let Some(follower) = followers.get(*follower_index as usize) {
+                    *follower_index += 1;
+
+                    if !chain.contains(follower) { // OPT: Better membership test
+
+                        chain.push(*follower);
+
+                        break;
+                    } // else: don't break
+                } else {
+                    *follower_index = 0;
+
+                    if chain.len() > longest.len() {
+                        longest = chain.clone();
+
+                        println!("{}", pretty_format_chain(&TEMP_SORTED_WORDS, &longest));
+                    }
+
+                    chain.pop();
+
+                    break;
+                }
+            }
+        }
+    }
+
+    println!("Finished search");
+}
+
+fn pretty_format_chain(sorted_words: &Vec<String>, chain: &Vec<u8>) -> String {
+
+    debug_assert!(chain.len() > 0);
+
+    let mut result = format!("Chain of length {}: ", chain.len());
+
+    for (left, right) in chain
+        .windows(2)
+        .map(|win| (&sorted_words[win[0] as usize], &sorted_words[win[1] as usize])) {
+
+        let overlap = overlapping_chars(&left, &right);
+
+        result.push_str(&left[..left.len() - overlap]);
+    };
+
+    result.push_str(&sorted_words[*chain.last().unwrap() as usize]);
+
+    result
 }
