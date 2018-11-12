@@ -10,6 +10,7 @@ use std::str;
 use std::cmp;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::time::{Duration, Instant};
 
 fn main() {
 
@@ -55,7 +56,22 @@ fn main() {
 
     let follower_table = create_follower_table(&sorted_words, &follower_map);
 
-    find_longest_chain(&follower_table, &sorted_words);
+    let mut duration = Duration::from_secs(0);
+
+    const ATTEMPTS: u32 = 5;
+
+    for _ in 1..=ATTEMPTS {
+
+        let before = Instant::now();
+
+        find_longest_chain(&follower_table, &sorted_words);
+
+       duration += before.elapsed();
+    }
+
+    duration /= ATTEMPTS;
+
+    println!("Finished search in {}.{} s (average of {})", duration.as_secs(), duration.subsec_millis(), ATTEMPTS);
 }
 
 fn validate_min_overlap(arg: String) -> Result<(), String> {
@@ -265,8 +281,6 @@ fn find_longest_chain(follower_table: &Vec<Vec<u8>>, TEMP_SORTED_WORDS: &Vec<Str
             }
         }
     }
-
-    println!("Finished search");
 }
 
 fn pretty_format_chain(sorted_words: &Vec<String>, chain: &Vec<u8>) -> String {

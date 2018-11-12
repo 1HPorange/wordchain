@@ -68,3 +68,7 @@ Lux
 Malphite
 Malzahar
 Maokai
+Master Yi
+Miss Fortune
+Mordekaiser
+Morgana
