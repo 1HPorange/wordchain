@@ -39,13 +39,13 @@
       </usages-collector>
       <usages-collector id="statistics.file.extensions.edit">
         <counts>
-          <entry key="rs" value="10935" />
+          <entry key="rs" value="12043" />
           <entry key="toml" value="1" />
         </counts>
       </usages-collector>
       <usages-collector id="statistics.file.types.edit">
         <counts>
-          <entry key="Rust" value="10935" />
+          <entry key="Rust" value="12043" />
           <entry key="TOML file" value="1" />
         </counts>
       </usages-collector>
@@ -65,8 +65,8 @@
       <file pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/src/main.rs">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="415">
-              <caret line="310" column="6" lean-forward="true" selection-start-line="310" selection-start-column="6" selection-end-line="310" selection-end-column="6" />
+            <state relative-caret-position="527">
+              <caret line="259" column="31" lean-forward="true" selection-start-line="259" selection-start-column="31" selection-end-line="259" selection-end-column="31" />
             </state>
           </provider>
         </entry>
@@ -185,8 +185,8 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/src/main.rs">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="415">
-          <caret line="310" column="6" lean-forward="true" selection-start-line="310" selection-start-column="6" selection-end-line="310" selection-end-column="6" />
+        <state relative-caret-position="527">
+          <caret line="259" column="31" lean-forward="true" selection-start-line="259" selection-start-column="31" selection-end-line="259" selection-end-column="31" />
         </state>
       </provider>
     </entry>

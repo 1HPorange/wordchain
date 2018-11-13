@@ -246,7 +246,11 @@ fn find_longest_chain(follower_table: &Vec<Vec<u8>>, TEMP_SORTED_WORDS: &Vec<Str
     // Contains the longest chain length for a given starter token
     // Can be used to abort later chains early
     // Note: This actually contains the length - 1, since a chain could be 256 words long, but not 0
-    let mut starter_longest_records: Vec<u8> = vec![std::u8::MAX; follower_table.len()];
+    // POSS OPT: Find a better representation of this concept
+    // POSS OPT: For large chains, this optimization could actually hurt bc. of the cycles wasted testing for longest chains
+    // SOL: After we reached 255, use another version of this function without the longest check
+    // POSS OPT: Instead of generously estimating potential length, actually calculate the overlap of the followers longest chain with the current chain to get a better/lower estimate
+    let mut starter_longest_records: Vec<Option<u8>> = vec![None; follower_table.len()];
 
     for start_index in 0..follower_table.len() as u8 {
 
@@ -269,16 +273,19 @@ fn find_longest_chain(follower_table: &Vec<Vec<u8>>, TEMP_SORTED_WORDS: &Vec<Str
                 if let Some(follower) = followers.get(*follower_index as usize) {
                     *follower_index += 1;
 
-                    // POSS OPT: Think about whether to do this check before or after membership test
-                    let can_be_longest: bool = match starter_longest_records[*follower as usize].checked_add(chain.len() as u8) {
-                        Some(len) => {
-                            starter_longest = cmp::max(starter_longest, len); // TODO: see if max needed
-                            len >= longest.len() as u8
+                    // This happens before the membership test because this test is much cheaper and can lead to skipping the membership test
+                    let can_be_longest: bool = match starter_longest_records[*follower as usize] {
+                        Some(record) =>  match record.checked_add(chain.len() as u8) {
+                            Some(potential_len) => {
+                                starter_longest = cmp::max(potential_len, starter_longest);
+                                potential_len >= longest.len() as u8 // we have info about a record and this can maybe be the longest chain
+                            },
+                            None => {
+                                starter_longest = std::u8::MAX;
+                                true // we have info about a record and this can definitely be the longest chain
+                            }
                         },
-                        None => {
-                            starter_longest = std::u8::MAX;
-                            true
-                        }
+                        None => true // we don't have info about a record
                     };
 
                     if can_be_longest && !chain.contains(follower) { // OPT: Better membership test
@@ -305,10 +312,10 @@ fn find_longest_chain(follower_table: &Vec<Vec<u8>>, TEMP_SORTED_WORDS: &Vec<Str
             }
         }
 
-        starter_longest_records[start_index as usize] = starter_longest;
+        starter_longest_records[start_index as usize] = Some(starter_longest);
     }
 
-    //println!("After: {:?}", starter_longest_records.iter().zip(TEMP_SORTED_WORDS).collect::<Vec<_>>());
+    println!("After: {:?}", starter_longest_records.iter().zip(TEMP_SORTED_WORDS).collect::<Vec<_>>());
 }
 
 fn pretty_format_chain(sorted_words: &Vec<String>, chain: &Vec<u8>) -> String {
