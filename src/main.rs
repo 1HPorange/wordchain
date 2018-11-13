@@ -118,7 +118,7 @@ fn overlapping_chars(left: &str, right: &str) -> usize {
     let mut left = left.chars().as_str();
     let mut right = right.chars().as_str();
 
-    // This issue should be caught by the file parser:
+    // TODO:? This issue should be caught by the file parser:
     debug_assert!(left.len() > 0 && right.len() > 0);
 
     let max_overlap = cmp::min(left.len(), right.len()) - 1;
@@ -238,12 +238,22 @@ fn find_longest_chain(follower_table: &Vec<Vec<u8>>, TEMP_SORTED_WORDS: &Vec<Str
     // POSS OPT: Can be one shorter, since the start index is not a follower of anything
     let mut follower_table_indices = vec![0u8; follower_table.len()];
 
-    // POSS OPT:
+    // POSS OPT: don't save this in the thread, but in a mutexed location
+    // Save only the max length here and update it whenever we acquire the mutex
+    // POSS OPT: Guess the longest chain length here (very minor)
     let mut longest = Vec::new();
+
+    // Contains the longest chain length for a given starter token
+    // Can be used to abort later chains early
+    // Note: This actually contains the length - 1, since a chain could be 256 words long, but not 0
+    let mut starter_longest_records: Vec<u8> = vec![std::u8::MAX; follower_table.len()];
 
     for start_index in 0..follower_table.len() as u8 {
 
         chain.push(start_index);
+
+        // Again, this actually contains the length - 1
+        let mut starter_longest = 0u8;
 
         loop {
             let index = match chain.last() {
@@ -259,7 +269,19 @@ fn find_longest_chain(follower_table: &Vec<Vec<u8>>, TEMP_SORTED_WORDS: &Vec<Str
                 if let Some(follower) = followers.get(*follower_index as usize) {
                     *follower_index += 1;
 
-                    if !chain.contains(follower) { // OPT: Better membership test
+                    // POSS OPT: Think about whether to do this check before or after membership test
+                    let can_be_longest: bool = match starter_longest_records[*follower as usize].checked_add(chain.len() as u8) {
+                        Some(len) => {
+                            starter_longest = cmp::max(starter_longest, len); // TODO: see if max needed
+                            len >= longest.len() as u8
+                        },
+                        None => {
+                            starter_longest = std::u8::MAX;
+                            true
+                        }
+                    };
+
+                    if can_be_longest && !chain.contains(follower) { // OPT: Better membership test
 
                         chain.push(*follower);
 
@@ -271,7 +293,9 @@ fn find_longest_chain(follower_table: &Vec<Vec<u8>>, TEMP_SORTED_WORDS: &Vec<Str
                     if chain.len() > longest.len() {
                         longest = chain.clone();
 
-                        println!("{}", pretty_format_chain(&TEMP_SORTED_WORDS, &longest));
+                        println!("Chain of length {}: {}",
+                            longest.len(),
+                            pretty_format_chain(&TEMP_SORTED_WORDS, &longest));
                     }
 
                     chain.pop();
@@ -280,14 +304,19 @@ fn find_longest_chain(follower_table: &Vec<Vec<u8>>, TEMP_SORTED_WORDS: &Vec<Str
                 }
             }
         }
+
+        starter_longest_records[start_index as usize] = starter_longest;
     }
+
+    //println!("After: {:?}", starter_longest_records.iter().zip(TEMP_SORTED_WORDS).collect::<Vec<_>>());
 }
 
 fn pretty_format_chain(sorted_words: &Vec<String>, chain: &Vec<u8>) -> String {
 
+    // TODO: Parser should make sure we have at least one word
     debug_assert!(chain.len() > 0);
 
-    let mut result = format!("Chain of length {}: ", chain.len());
+    let mut result = String::new();
 
     for (left, right) in chain
         .windows(2)
