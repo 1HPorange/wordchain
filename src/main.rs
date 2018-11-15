@@ -1,6 +1,8 @@
 #[macro_use]
 extern crate clap;
 
+extern crate uint;
+
 use clap::{App, Arg};
 use std::path::Path;
 use std::io;
@@ -11,6 +13,7 @@ use std::cmp;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::time::{Duration, Instant};
+use uint::U256;
 
 fn main() {
 
@@ -249,15 +252,21 @@ fn find_longest_chain(follower_table: &Vec<Vec<u8>>, TEMP_SORTED_WORDS: &Vec<Str
     // POSS OPT: Find a better representation of this concept
     // POSS OPT: For large chains, this optimization could actually hurt bc. of the cycles wasted testing for longest chains
     // SOL: After we reached 255, use another version of this function without the longest check
+    //      Actually, no. Later words might still benefit from early longest estimate values
     // POSS OPT: Instead of generously estimating potential length, actually calculate the overlap of the followers longest chain with the current chain to get a better/lower estimate
-    let mut starter_longest_records: Vec<Option<u8>> = vec![None; follower_table.len()];
+    // SOL: Nope, this doesn't work, since we don't actually have those members if we abort early, meaning this method also deteriorates. Also there might be multiple longest chains.
+    //      Well maybe there is a way, but it's gonna be very rocky.
+    let mut longest_estimates: Vec<Option<u8>> = vec![None; follower_table.len()];
+
+    let mut chain_mask = U256::zero();
 
     for start_index in 0..follower_table.len() as u8 {
 
         chain.push(start_index);
+        chain_mask = chain_mask | U256::one() << start_index;
 
         // Again, this actually contains the length - 1
-        let mut starter_longest = 0u8;
+        let mut starter_longest_estimate = 0u8;
 
         loop {
             let index = match chain.last() {
@@ -274,23 +283,24 @@ fn find_longest_chain(follower_table: &Vec<Vec<u8>>, TEMP_SORTED_WORDS: &Vec<Str
                     *follower_index += 1;
 
                     // This happens before the membership test because this test is much cheaper and can lead to skipping the membership test
-                    let can_be_longest: bool = match starter_longest_records[*follower as usize] {
+                    let can_be_longest: bool = match longest_estimates[*follower as usize] {
                         Some(record) =>  match record.checked_add(chain.len() as u8) {
                             Some(potential_len) => {
-                                starter_longest = cmp::max(potential_len, starter_longest);
+                                starter_longest_estimate = cmp::max(potential_len, starter_longest_estimate);
                                 potential_len >= longest.len() as u8 // we have info about a record and this can maybe be the longest chain
                             },
                             None => {
-                                starter_longest = std::u8::MAX;
+                                starter_longest_estimate = std::u8::MAX;
                                 true // we have info about a record and this can definitely be the longest chain
                             }
                         },
                         None => true // we don't have info about a record
                     };
 
-                    if can_be_longest && !chain.contains(follower) { // OPT: Better membership test
+                    if can_be_longest && !chain_mask.bit(*follower as usize) {
 
                         chain.push(*follower);
+                        chain_mask = chain_mask | U256::one() << *follower;
 
                         break;
                     } // else: don't break
@@ -306,16 +316,15 @@ fn find_longest_chain(follower_table: &Vec<Vec<u8>>, TEMP_SORTED_WORDS: &Vec<Str
                     }
 
                     chain.pop();
+                    chain_mask = chain_mask & !(U256::one() << index);
 
                     break;
                 }
             }
         }
 
-        starter_longest_records[start_index as usize] = Some(starter_longest);
+        longest_estimates[start_index as usize] = Some(starter_longest_estimate);
     }
-
-    println!("After: {:?}", starter_longest_records.iter().zip(TEMP_SORTED_WORDS).collect::<Vec<_>>());
 }
 
 fn pretty_format_chain(sorted_words: &Vec<String>, chain: &Vec<u8>) -> String {
