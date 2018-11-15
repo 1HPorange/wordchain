@@ -61,20 +61,40 @@ fn main() {
 
     let mut duration = Duration::from_secs(0);
 
-    const ATTEMPTS: u32 = 5;
 
-    for _ in 1..=ATTEMPTS {
+    let before = Instant::now();
 
-        let before = Instant::now();
+    find_longest_chain(&follower_table, &sorted_words);
 
-        find_longest_chain(&follower_table, &sorted_words);
+    duration += before.elapsed();
 
-       duration += before.elapsed();
-    }
+    println!("Finished search in {}.{} s", duration.as_secs(), duration.subsec_millis());
+}
 
-    duration /= ATTEMPTS;
+fn find_longest_chain_parallel() -> Vec<u8> {
 
-    println!("Finished search in {}.{} s (average of {})", duration.as_secs(), duration.subsec_millis(), ATTEMPTS);
+    // Create threads
+    // 1. listen to task channel for new start_chain
+    // 2. execute chain finding algorithm
+    // 3. post results to result channel
+
+    // Longest chain mutex
+    // - each thread has a estimate of what they think is the global longest chain length
+    // - when they THINK that they found a longer chain, they acquire a mutex on the longest chain
+    // - if they are right, replace the longest chain
+    // - in any case, update your local estimate
+
+    // Shared read-only longest chain estimates
+    // Longest chain estimates are shared by each task, but are read-only
+    // They are only modified in this function
+
+    // For each word
+    // - Create each chain up to depth n
+    // - While creating them, already push them to the task queue
+    // - Collect all results from the result queue
+    // - Update longest chain estimate vector
+
+    panic!();
 }
 
 fn validate_min_overlap(arg: String) -> Result<(), String> {
@@ -231,7 +251,7 @@ fn create_follower_table(sorted_words: &Vec<String>, follower_map: &FollowerMap)
     table
 }
 
-fn find_longest_chain(follower_table: &Vec<Vec<u8>>, TEMP_SORTED_WORDS: &Vec<String>) { // TODO: Remove this param
+fn find_longest_chain(follower_table: &Vec<Vec<u8>>, TEMP_SORTED_WORDS: &Vec<String>) { // TODO: Remove this param // TODO: Rename this func
 
     // Setup
     // TODO: Some of this should come from parameters
