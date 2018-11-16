@@ -6,3 +6,5 @@ authors = ["mweb"]
 [dependencies]
 clap = "2.32"
 uint = "0.4.1"
+spmc = "0.2.2"
+num_cpus = "1.8.0"

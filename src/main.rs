@@ -3,6 +3,10 @@ extern crate clap;
 
 extern crate uint;
 
+extern crate spmc;
+
+extern crate num_cpus;
+
 use clap::{App, Arg};
 use std::path::Path;
 use std::io;
@@ -14,11 +18,16 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::time::{Duration, Instant};
 use uint::U256;
+use std::thread;
+use std::iter;
+
+use std::sync::{mpsc,Arc,Mutex};
 
 fn main() {
 
-    const ARG_MIN_OVERLAP : &str = "min-overlap";
-    const ARG_WORD_FILE : &str = "word-file";
+    const ARG_MIN_OVERLAP: &str = "min-overlap";
+    const ARG_WORD_FILE: &str = "word-file";
+    const ARG_SINGLE_THREAD: &str = "single-thread";
 
     let matches = App::new("wordchain")
         .version(crate_version!())
@@ -35,6 +44,10 @@ fn main() {
             .help("A file with all unique words to be considered, separated by line-breaks")
             .required(true)
             .validator(validate_word_file))
+        .arg(Arg::with_name(ARG_SINGLE_THREAD)
+            .short("s")
+            .long("single-thread")
+            .help("Runs the algorithm without worker threads, which might be faster in rare cases"))
         .get_matches();
 
     let words_file = matches.value_of(ARG_WORD_FILE).unwrap();
@@ -61,40 +74,168 @@ fn main() {
 
     let mut duration = Duration::from_secs(0);
 
-
     let before = Instant::now();
 
-    find_longest_chain(&follower_table, &sorted_words);
+    let longest = if matches.is_present(ARG_SINGLE_THREAD) {
+        find_longest_chain_single(follower_table)
+    } else {
+        find_longest_chain_parallel(follower_table)
+    };
 
     duration += before.elapsed();
+
+    println!("Longest chain ({}): {}", longest.len(), pretty_format_chain(&sorted_words, &longest));
 
     println!("Finished search in {}.{} s", duration.as_secs(), duration.subsec_millis());
 }
 
-fn find_longest_chain_parallel() -> Vec<u8> {
+fn find_longest_chain_single(follower_table: Vec<Vec<u8>>) -> Vec<u8> {
 
-    // Create threads
-    // 1. listen to task channel for new start_chain
-    // 2. execute chain finding algorithm
-    // 3. post results to result channel
+    let mut follower_table_indices = vec![0u8; follower_table.len()];
 
-    // Longest chain mutex
-    // - each thread has a estimate of what they think is the global longest chain length
-    // - when they THINK that they found a longer chain, they acquire a mutex on the longest chain
-    // - if they are right, replace the longest chain
-    // - in any case, update your local estimate
+    let mut longest_estimates: Vec<Option<u8>> = vec![None; follower_table.len()];
 
-    // Shared read-only longest chain estimates
-    // Longest chain estimates are shared by each task, but are read-only
-    // They are only modified in this function
+    let follower_table = Arc::new(follower_table);
 
-    // For each word
-    // - Create each chain up to depth n
-    // - While creating them, already push them to the task queue
-    // - Collect all results from the result queue
-    // - Update longest chain estimate vector
+    let longest_chain = Arc::new(Mutex::new(Vec::new()));
 
-    panic!();
+    find_partial_longest(vec![0u8], &mut follower_table_indices, &longest_estimates.clone(), &follower_table, &longest_chain);
+
+    println!("Finished word 1/{}", follower_table.len());
+
+    longest_estimates[0] = Some(longest_chain.lock().unwrap().len() as u8);
+
+    for start_index in 1..follower_table.len() as u8 {
+
+        let est = find_partial_longest(vec![start_index], &mut follower_table_indices, &longest_estimates.clone(), &follower_table, &longest_chain);
+
+        longest_estimates[start_index as usize] = Some(est);
+
+        println!("Finished word {}/{}", start_index as u16 + 1, follower_table.len());
+    }
+
+    // TODO: Think about a better way to return this
+
+    let longest_chain = longest_chain.lock().unwrap().clone();
+
+    longest_chain
+}
+
+fn find_longest_chain_parallel(follower_table: Vec<Vec<u8>>) -> Vec<u8> {
+
+    let follower_table = Arc::new(follower_table);
+
+    let longest_chain = Arc::new(Mutex::new(Vec::new()));
+
+    let (task_tx, task_rx) = spmc::channel();
+    let (estimates_tx, estimates_rx) = spmc::channel();
+    let (result_tx, result_rx) = mpsc::channel();
+
+    let mut threads = Vec::new();
+
+    for _ in 0..num_cpus::get() {
+
+        let thread_task_rx = task_rx.clone();
+        let thread_estimates_rx = estimates_rx.clone();
+        let thread_tx = result_tx.clone();
+
+        let thread_follower_table = Arc::clone(&follower_table);
+        let thread_longest_chain = Arc::clone(&longest_chain);
+
+        threads.push(thread::spawn(move || {
+
+            // POSS OPT: Can be one shorter i think ;)
+            let mut follower_table_indices = vec![0u8; thread_follower_table.len()];
+
+            loop {
+                let start_chain = match thread_task_rx.recv() {
+                    Ok(chain) => chain,
+                    Err(_) => break
+                };
+
+                let longest_estimates = match thread_estimates_rx.recv() {
+                    Ok(estimates) => estimates,
+                    Err(_) => break
+                };
+
+                let partial_result = find_partial_longest(
+                    start_chain,
+                    &mut follower_table_indices,
+                    &longest_estimates,
+                    &thread_follower_table,
+                    &thread_longest_chain
+                );
+
+                thread_tx.send(partial_result).unwrap();
+            }
+
+        }));
+    };
+
+    let mut longest_estimates: Vec<Option<u8>> = vec![None; follower_table.len()];
+
+    for start_index in 0..follower_table.len() as u8 {
+
+        let mut chains = vec![vec![start_index]];
+
+        // TODO: Fix this abomination below...
+        for _ in 1..=3 { // TODO: Make this depth configurable or dependent on something smart
+
+            chains = chains.iter().flat_map(|v| {
+
+                let last = *v.last().unwrap() as usize;
+
+                let legal_followers = follower_table[last].iter()
+                    .filter(|i| !v.contains(i))
+                    .map(ToOwned::to_owned)
+                    .collect::<Vec<u8>>();
+
+                iter::repeat(v).zip(legal_followers)
+                    .map(|(l,r)| {
+                        let mut new = l.clone();
+
+                        new.push(r);
+                        new
+
+                    })
+            }).collect();
+        }
+
+        let num_chains = chains.len();
+
+        for chain in chains {
+
+            task_tx.send(chain).unwrap();
+            estimates_tx.send(longest_estimates.clone()).unwrap();
+        }
+
+        let mut longest_estimate = 0u8;
+
+        for _ in 0..num_chains {
+            longest_estimate = cmp::max(longest_estimate, result_rx.recv().unwrap());
+        }
+
+        if 0 == start_index { // TODO: Make this nicer
+            longest_estimates[0] = Some(longest_chain.lock().unwrap().len() as u8);
+        }
+        else {
+            longest_estimates[start_index as usize] = Some(longest_estimate);
+        }
+
+        println!("Finished word {}/{}", start_index as u16 + 1, follower_table.len());
+    };
+
+    drop(task_tx);
+
+    for thread in threads {
+        thread.join().unwrap();
+    }
+
+    // TODO: Think about a better way to return this
+
+    let longest_chain = longest_chain.lock().unwrap().clone();
+
+    longest_chain
 }
 
 fn validate_min_overlap(arg: String) -> Result<(), String> {
@@ -251,100 +392,89 @@ fn create_follower_table(sorted_words: &Vec<String>, follower_map: &FollowerMap)
     table
 }
 
-fn find_longest_chain(follower_table: &Vec<Vec<u8>>, TEMP_SORTED_WORDS: &Vec<String>) { // TODO: Remove this param // TODO: Rename this func
+fn find_partial_longest(
+    mut chain: Vec<u8>,
+    follower_table_indices: &mut Vec<u8>,
+    longest_estimates: &Vec<Option<u8>>,
+    follower_table: &Arc<Vec<Vec<u8>>>,
+    longest_chain: &Arc<Mutex<Vec<u8>>>)
+    -> u8 {
 
-    // Setup
-    // TODO: Some of this should come from parameters
+    let initial_len = chain.len();
 
-    let mut chain = Vec::with_capacity(follower_table.len());
+    debug_assert!(initial_len > 0);
 
-    // POSS OPT: Can be one shorter, since the start index is not a follower of anything
-    let mut follower_table_indices = vec![0u8; follower_table.len()];
+    // Contains our best (safe) estimate of what the longest chain for our starting chain would be
+    // Again, this actually contains the length - 1
+    let mut estimate_for_initial_chain = 0u8;
 
-    // POSS OPT: don't save this in the thread, but in a mutexed location
-    // Save only the max length here and update it whenever we acquire the mutex
-    // POSS OPT: Guess the longest chain length here (very minor)
-    let mut longest = Vec::new();
+    let mut chain_mask = chain
+        .iter()
+        .map(|&i| U256::one() << i)
+        .fold(U256::zero(), |acc, mask| acc + mask);
 
-    // Contains the longest chain length for a given starter token
-    // Can be used to abort later chains early
-    // Note: This actually contains the length - 1, since a chain could be 256 words long, but not 0
-    // POSS OPT: Find a better representation of this concept
-    // POSS OPT: For large chains, this optimization could actually hurt bc. of the cycles wasted testing for longest chains
-    // SOL: After we reached 255, use another version of this function without the longest check
-    //      Actually, no. Later words might still benefit from early longest estimate values
-    // POSS OPT: Instead of generously estimating potential length, actually calculate the overlap of the followers longest chain with the current chain to get a better/lower estimate
-    // SOL: Nope, this doesn't work, since we don't actually have those members if we abort early, meaning this method also deteriorates. Also there might be multiple longest chains.
-    //      Well maybe there is a way, but it's gonna be very rocky.
-    let mut longest_estimates: Vec<Option<u8>> = vec![None; follower_table.len()];
+    // Contains a safe guess of how long the global record chain is. Can avoid extensive mutex locking.
+    let mut local_longest_hint = 0u8;
 
-    let mut chain_mask = U256::zero();
+    loop {
+        let index = *chain.last().unwrap() as usize;
 
-    for start_index in 0..follower_table.len() as u8 {
+        let followers = &follower_table[index];
 
-        chain.push(start_index);
-        chain_mask = chain_mask | U256::one() << start_index;
-
-        // Again, this actually contains the length - 1
-        let mut starter_longest_estimate = 0u8;
+        let follower_index = &mut follower_table_indices[index];
 
         loop {
-            let index = match chain.last() {
-                Some(i) => *i as usize,
-                None => break
-            };
+            if let Some(follower) = followers.get(*follower_index as usize) {
+                *follower_index += 1;
 
-            let followers = &follower_table[index];
-
-            let follower_index = &mut follower_table_indices[index];
-
-            loop {
-                if let Some(follower) = followers.get(*follower_index as usize) {
-                    *follower_index += 1;
-
-                    // This happens before the membership test because this test is much cheaper and can lead to skipping the membership test
-                    let can_be_longest: bool = match longest_estimates[*follower as usize] {
-                        Some(record) =>  match record.checked_add(chain.len() as u8) {
-                            Some(potential_len) => {
-                                starter_longest_estimate = cmp::max(potential_len, starter_longest_estimate);
-                                potential_len >= longest.len() as u8 // we have info about a record and this can maybe be the longest chain
-                            },
-                            None => {
-                                starter_longest_estimate = std::u8::MAX;
-                                true // we have info about a record and this can definitely be the longest chain
-                            }
+                // This happens before the membership test because this test is much cheaper and can lead to skipping the membership test
+                let can_be_longest: bool = match longest_estimates[*follower as usize] {
+                    Some(estimate) =>  match estimate.checked_add(chain.len() as u8) {
+                        Some(potential_len) => {
+                            estimate_for_initial_chain = cmp::max(potential_len, estimate_for_initial_chain);
+                            potential_len >= local_longest_hint // we have info about a record and this can maybe be the longest chain
                         },
-                        None => true // we don't have info about a record
-                    };
+                        None => {
+                            estimate_for_initial_chain = std::u8::MAX;
+                            true // we have info about a record and this can definitely be the longest chain
+                        }
+                    },
+                    None => true // we don't have info about a record
+                };
 
-                    if can_be_longest && !chain_mask.bit(*follower as usize) {
+                if can_be_longest && !chain_mask.bit(*follower as usize) {
 
-                        chain.push(*follower);
-                        chain_mask = chain_mask | U256::one() << *follower;
-
-                        break;
-                    } // else: don't break
-                } else {
-                    *follower_index = 0;
-
-                    if chain.len() > longest.len() {
-                        longest = chain.clone();
-
-                        println!("Chain of length {}: {}",
-                            longest.len(),
-                            pretty_format_chain(&TEMP_SORTED_WORDS, &longest));
-                    }
-
-                    chain.pop();
-                    chain_mask = chain_mask & !(U256::one() << index);
+                    chain.push(*follower);
+                    chain_mask = chain_mask | U256::one() << *follower;
 
                     break;
+                } // else: don't break
+            } else {
+                *follower_index = 0;
+
+                if chain.len() as u8 > local_longest_hint {
+
+                    let mut longest = longest_chain.lock().unwrap();
+
+                    if chain.len() > longest.len() {
+                        *longest = chain.clone();
+                    }
+
+                    local_longest_hint = longest.len() as u8;
                 }
+
+                chain.pop();
+
+                if chain.len() < initial_len {
+                    return estimate_for_initial_chain;
+                }
+
+                chain_mask = chain_mask & !(U256::one() << index);
+
+                break;
             }
         }
-
-        longest_estimates[start_index as usize] = Some(starter_longest_estimate);
-    }
+    };
 }
 
 fn pretty_format_chain(sorted_words: &Vec<String>, chain: &Vec<u8>) -> String {

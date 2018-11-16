@@ -75,5 +75,3 @@ Morgana
 Nami
 Nasus
 Nautilus
-Nidalee
-Nocturne
