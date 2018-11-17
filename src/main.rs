@@ -477,6 +477,106 @@ fn find_partial_longest(
     };
 }
 
+fn find_longest_chain_single_legacy(follower_table: Vec<Vec<u8>>) -> Vec<u8> {
+
+    // Setup
+    // TODO: Some of this should come from parameters
+
+    let mut chain = Vec::with_capacity(follower_table.len());
+
+    // POSS OPT: Can be one shorter, since the start index is not a follower of anything
+    let mut follower_table_indices = vec![0u8; follower_table.len()];
+
+    // POSS OPT: don't save this in the thread, but in a mutexed location
+    // Save only the max length here and update it whenever we acquire the mutex
+    // POSS OPT: Guess the longest chain length here (very minor)
+    let mut longest = Vec::new();
+
+    // Contains the longest chain length for a given starter token
+    // Can be used to abort later chains early
+    // Note: This actually contains the length - 1, since a chain could be 256 words long, but not 0
+    // POSS OPT: Find a better representation of this concept
+    // POSS OPT: For large chains, this optimization could actually hurt bc. of the cycles wasted testing for longest chains
+    // SOL: After we reached 255, use another version of this function without the longest check
+    //      Actually, no. Later words might still benefit from early longest estimate values
+    // POSS OPT: Instead of generously estimating potential length, actually calculate the overlap of the followers longest chain with the current chain to get a better/lower estimate
+    // SOL: Nope, this doesn't work, since we don't actually have those members if we abort early, meaning this method also deteriorates. Also there might be multiple longest chains.
+    //      Well maybe there is a way, but it's gonna be very rocky.
+    let mut longest_estimates: Vec<Option<u8>> = vec![None; follower_table.len()];
+
+    let mut chain_mask = U256::zero();
+
+    for start_index in 0..follower_table.len() as u8 {
+
+        chain.push(start_index);
+        chain_mask = chain_mask | U256::one() << start_index;
+
+        // Again, this actually contains the length - 1
+        let mut starter_longest_estimate = 0u8;
+
+        loop {
+            let index = match chain.last() {
+                Some(i) => *i as usize,
+                None => break
+            };
+
+            let followers = &follower_table[index];
+
+            let follower_index = &mut follower_table_indices[index];
+
+            loop {
+                if let Some(follower) = followers.get(*follower_index as usize) {
+                    *follower_index += 1;
+
+                    // This happens before the membership test because this test is much cheaper and can lead to skipping the membership test
+                    let can_be_longest: bool = match longest_estimates[*follower as usize] {
+                        Some(record) =>  match record.checked_add(chain.len() as u8) {
+                            Some(potential_len) => {
+                                starter_longest_estimate = cmp::max(potential_len, starter_longest_estimate);
+                                potential_len >= longest.len() as u8 // we have info about a record and this can maybe be the longest chain
+                            },
+                            None => {
+                                starter_longest_estimate = std::u8::MAX;
+                                true // we have info about a record and this can definitely be the longest chain
+                            }
+                        },
+                        None => true // we don't have info about a record
+                    };
+
+                    if can_be_longest && !chain_mask.bit(*follower as usize) {
+
+                        chain.push(*follower);
+                        chain_mask = chain_mask | U256::one() << *follower;
+
+                        break;
+                    } // else: don't break
+                } else {
+                    *follower_index = 0;
+
+                    if chain.len() > longest.len() {
+                        longest = chain.clone();
+                    }
+
+                    chain.pop();
+                    chain_mask = chain_mask & !(U256::one() << index);
+
+                    break;
+                }
+            }
+        }
+
+        if 0 == start_index {
+            longest_estimates[0] = Some(longest.len() as u8);
+        } else {
+            longest_estimates[start_index as usize] = Some(starter_longest_estimate);
+        }
+
+        println!("Finished word {}/{}", start_index as u16 + 1, follower_table.len());
+    }
+
+    longest
+}
+
 fn pretty_format_chain(sorted_words: &Vec<String>, chain: &Vec<u8>) -> String {
 
     // TODO: Parser should make sure we have at least one word
