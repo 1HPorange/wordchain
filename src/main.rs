@@ -95,9 +95,7 @@ fn find_longest_chain_single(follower_table: Vec<Vec<u8>>) -> Vec<u8> {
 
     let mut longest_estimates: Vec<Option<u8>> = vec![None; follower_table.len()];
 
-    let follower_table = Arc::new(follower_table);
-
-    let longest_chain = Arc::new(Mutex::new(Vec::new()));
+    let longest_chain = Mutex::new(Vec::new());
 
     find_partial_longest(vec![0u8], &mut follower_table_indices, &longest_estimates.clone(), &follower_table, &longest_chain);
 
