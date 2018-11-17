@@ -22,6 +22,7 @@ fn main() {
     const ARG_MIN_OVERLAP: &str = "min-overlap";
     const ARG_WORD_FILE: &str = "word-file";
     const ARG_GRANULARITY: &str = "granularity";
+    const ARG_VERBOSE: &str = "verbose";
 
     let matches = App::new("wordchain")
         .version(crate_version!())
@@ -45,6 +46,10 @@ fn main() {
             .help("Granularity of the task-distribution: Higher values help with load-balancing, but create more orchestration overhead. \
             Just try some values to find the best fit for your system. Larger workloads usually benefit from slightly increased values.")
             .validator(validate_granularity))
+        .arg(Arg::with_name(ARG_VERBOSE)
+            .short("v")
+            .long(ARG_VERBOSE)
+            .takes_value(false))
         .get_matches();
 
     let words_file = matches.value_of(ARG_WORD_FILE).unwrap();
@@ -52,6 +57,8 @@ fn main() {
     let min_overlap = value_t_or_exit!(matches, ARG_MIN_OVERLAP, usize);
 
     let granularity = value_t_or_exit!(matches, ARG_GRANULARITY, u8);
+
+    let verbose = matches.is_present(ARG_VERBOSE);
 
     let words = parse_words_file(words_file).unwrap_or_else(|e| {
         panic!("Could not read file: {}", e);
@@ -76,16 +83,24 @@ fn main() {
 
     let before = Instant::now();
 
-    let longest = find_longest_chain_parallel(&follower_table, granularity);
+    let longest_chain = find_longest_chain_parallel(&follower_table, granularity, &sorted_words, verbose);
+
+    if !verbose {
+        println!("Longest chain ({}): {}",
+            longest_chain.len(),
+            pretty_format_chain(&sorted_words, &longest_chain));
+    }
 
     duration += before.elapsed();
-
-    println!("Longest chain ({}): {}", longest.len(), pretty_format_chain(&sorted_words, &longest));
 
     println!("Finished search in {}.{} s", duration.as_secs(), duration.subsec_millis());
 }
 
-fn find_longest_chain_parallel(follower_table: &Vec<Vec<u8>>, granularity: u8) -> Vec<u8> {
+fn find_longest_chain_parallel(
+    follower_table: &Vec<Vec<u8>>,
+    granularity: u8,
+    sorted_words: &Vec<String>,
+    verbose: bool) -> Vec<u8> {
 
     let mut global_longest = Vec::new(); // MIN OPT: Guess length
 
@@ -137,7 +152,13 @@ fn find_longest_chain_parallel(follower_table: &Vec<Vec<u8>>, granularity: u8) -
             global_longest = local_longest;
         }
 
-        println!("Finished word {}/{}", start_index as u16 + 1, follower_table.len());
+        if verbose {
+            println!("Finished word {}/{} - Longest chain until now ({}):\n{}",
+                     start_index as u16 + 1,
+                     follower_table.len(),
+                     global_longest.len(),
+                     pretty_format_chain(&sorted_words, &global_longest));
+        }
     };
 
     global_longest
