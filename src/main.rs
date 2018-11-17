@@ -21,7 +21,7 @@ use uint::U256;
 use std::thread;
 use std::iter;
 
-use std::sync::{mpsc,Arc,Mutex};
+use std::sync::{mpsc,Arc};
 
 fn main() {
 
@@ -95,35 +95,33 @@ fn find_longest_chain_single(follower_table: Vec<Vec<u8>>) -> Vec<u8> {
 
     let mut longest_estimates: Vec<Option<u8>> = vec![None; follower_table.len()];
 
-    let longest_chain = Mutex::new(Vec::new());
-
-    find_partial_longest(vec![0u8], &mut follower_table_indices, &longest_estimates.clone(), &follower_table, &longest_chain);
+    let (mut global_longest, _) = find_partial_longest(vec![0u8], &mut follower_table_indices, &longest_estimates, &follower_table);
 
     println!("Finished word 1/{}", follower_table.len());
 
-    longest_estimates[0] = Some(longest_chain.lock().unwrap().len() as u8);
+    longest_estimates[0] = Some(global_longest.len() as u8);
 
     for start_index in 1..follower_table.len() as u8 {
 
-        let est = find_partial_longest(vec![start_index], &mut follower_table_indices, &longest_estimates.clone(), &follower_table, &longest_chain);
+        let (local_longest, estimate) = find_partial_longest(vec![start_index], &mut follower_table_indices, &longest_estimates, &follower_table);
 
-        longest_estimates[start_index as usize] = Some(est);
+        longest_estimates[start_index as usize] = Some(estimate);
+
+        if local_longest.len() > global_longest.len() {
+            global_longest = local_longest;
+        }
 
         println!("Finished word {}/{}", start_index as u16 + 1, follower_table.len());
     }
 
-    // TODO: Think about a better way to return this
-
-    let longest_chain = longest_chain.lock().unwrap().clone();
-
-    longest_chain
+    global_longest
 }
 
 fn find_longest_chain_parallel(follower_table: Vec<Vec<u8>>) -> Vec<u8> {
 
     let follower_table = Arc::new(follower_table);
 
-    let longest_chain = Arc::new(Mutex::new(Vec::new()));
+    let mut global_longest = Vec::new(); // MIN OPT: Guess length
 
     let (task_tx, task_rx) = spmc::channel();
     let (estimates_tx, estimates_rx) = spmc::channel();
@@ -138,7 +136,6 @@ fn find_longest_chain_parallel(follower_table: Vec<Vec<u8>>) -> Vec<u8> {
         let thread_tx = result_tx.clone();
 
         let thread_follower_table = Arc::clone(&follower_table);
-        let thread_longest_chain = Arc::clone(&longest_chain);
 
         threads.push(thread::spawn(move || {
 
@@ -160,8 +157,7 @@ fn find_longest_chain_parallel(follower_table: Vec<Vec<u8>>) -> Vec<u8> {
                     start_chain,
                     &mut follower_table_indices,
                     &longest_estimates,
-                    &thread_follower_table,
-                    &thread_longest_chain
+                    &thread_follower_table
                 );
 
                 thread_tx.send(partial_result).unwrap();
@@ -210,11 +206,17 @@ fn find_longest_chain_parallel(follower_table: Vec<Vec<u8>>) -> Vec<u8> {
         let mut longest_estimate = 0u8;
 
         for _ in 0..num_chains {
-            longest_estimate = cmp::max(longest_estimate, result_rx.recv().unwrap());
+            let (local_longest, local_estimate) = result_rx.recv().unwrap();
+
+            longest_estimate = cmp::max(longest_estimate, local_estimate);
+
+            if local_longest.len() > global_longest.len() {
+                global_longest = local_longest;
+            }
         }
 
         if 0 == start_index { // TODO: Make this nicer
-            longest_estimates[0] = Some(longest_chain.lock().unwrap().len() as u8);
+            longest_estimates[0] = Some(global_longest.len() as u8);
         }
         else {
             longest_estimates[start_index as usize] = Some(longest_estimate);
@@ -229,11 +231,7 @@ fn find_longest_chain_parallel(follower_table: Vec<Vec<u8>>) -> Vec<u8> {
         thread.join().unwrap();
     }
 
-    // TODO: Think about a better way to return this
-
-    let longest_chain = longest_chain.lock().unwrap().clone();
-
-    longest_chain
+    global_longest
 }
 
 fn validate_min_overlap(arg: String) -> Result<(), String> {
@@ -394,9 +392,8 @@ fn find_partial_longest(
     mut chain: Vec<u8>,
     follower_table_indices: &mut Vec<u8>,
     longest_estimates: &Vec<Option<u8>>,
-    follower_table: &Vec<Vec<u8>>,
-    longest_chain: &Mutex<Vec<u8>>)
-    -> u8 {
+    follower_table: &Vec<Vec<u8>>)
+    -> (Vec<u8>, u8) {
 
     let initial_len = chain.len();
 
@@ -411,8 +408,8 @@ fn find_partial_longest(
         .map(|&i| U256::one() << i)
         .fold(U256::zero(), |acc, mask| acc + mask);
 
-    // Contains a safe guess of how long the global record chain is. Can avoid extensive mutex locking.
-    let mut local_longest_hint = 0u8;
+    // MIN OPT: Guess the size here.
+    let mut local_longest = Vec::new();
 
     loop {
         let index = *chain.last().unwrap() as usize;
@@ -430,7 +427,7 @@ fn find_partial_longest(
                     Some(estimate) =>  match estimate.checked_add(chain.len() as u8) {
                         Some(potential_len) => {
                             estimate_for_initial_chain = cmp::max(potential_len, estimate_for_initial_chain);
-                            potential_len >= local_longest_hint // we have info about a record and this can maybe be the longest chain
+                            potential_len >= local_longest.len() as u8 // we have info about a record and this can maybe be the longest chain
                         },
                         None => {
                             estimate_for_initial_chain = std::u8::MAX;
@@ -450,21 +447,16 @@ fn find_partial_longest(
             } else {
                 *follower_index = 0;
 
-                if chain.len() as u8 > local_longest_hint {
-
-                    let mut longest = longest_chain.lock().unwrap();
-
-                    if chain.len() > longest.len() {
-                        *longest = chain.clone();
-                    }
-
-                    local_longest_hint = longest.len() as u8;
+                if chain.len() > local_longest.len() {
+                    local_longest = chain.clone();
                 }
+
 
                 chain.pop();
 
                 if chain.len() < initial_len {
-                    return estimate_for_initial_chain;
+
+                    return (local_longest, estimate_for_initial_chain);
                 }
 
                 chain_mask = chain_mask & !(U256::one() << index);
