@@ -396,8 +396,8 @@ fn find_partial_longest(
     mut chain: Vec<u8>,
     follower_table_indices: &mut Vec<u8>,
     longest_estimates: &Vec<Option<u8>>,
-    follower_table: &Arc<Vec<Vec<u8>>>,
-    longest_chain: &Arc<Mutex<Vec<u8>>>)
+    follower_table: &Vec<Vec<u8>>,
+    longest_chain: &Mutex<Vec<u8>>)
     -> u8 {
 
     let initial_len = chain.len();
