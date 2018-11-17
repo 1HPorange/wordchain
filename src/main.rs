@@ -347,18 +347,13 @@ fn find_partial_longest(
             if let Some(follower) = followers.get(*follower_index as usize) {
                 *follower_index += 1;
 
-                // TODO: Make this construct nicer
-                // This happens before the membership test because this test is much cheaper and can lead to skipping the membership test
-                let can_be_longest: bool = match longest_estimates[*follower as usize] {
-                    Some(estimate) =>  match estimate.checked_add(chain.len() as u8) {
-                        Some(potential_len) => {
-                            estimate_for_initial_chain = Some(cmp::max(potential_len, estimate_for_initial_chain.unwrap_or(0)));
-                            potential_len >= local_longest.len() as u8 // we have info about a record and this can maybe be the longest chain
-                        },
-                        None => true // we have info about a record and this can definitely be the longest chain
-                    },
-                    None => true // we don't have info about a record
-                };
+                let can_be_longest = longest_estimates[*follower as usize]
+                    .and_then(|est| est.checked_add(chain.len() as u8))
+                    .map(|potential_len| {
+                        estimate_for_initial_chain = Some(cmp::max(potential_len, estimate_for_initial_chain.unwrap_or(0)));
+                        potential_len >= local_longest.len() as u8 // we have info about a record and this can maybe be the longest chain
+                    })
+                    .unwrap_or(true);
 
                 if can_be_longest && !chain_mask.bit(*follower as usize) {
 
