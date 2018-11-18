@@ -23,7 +23,7 @@ impl SortingOrder {
         match self {
             SortingOrder::ForFasterCompletion => Box::new(|a, b|
                 b.incoming.cmp(&a.incoming) // higher incoming
-                    .then(b.outgoing.cmp(&a.outgoing))), // higher outgoing
+                    .then(a.outgoing.cmp(&b.outgoing))), // lower outgoing
 
             SortingOrder::ForFasterIntermediateResults => Box::new(|a, b|
                 a.incoming.cmp(&b.incoming) // lower incoming
