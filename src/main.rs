@@ -36,13 +36,13 @@ fn main() {
             .short("g")
             .long(ARG_GRANULARITY)
             .help("Set how many levels of recursion the task generation algorithm uses (0-255). \
-            Lower values decrease management and memory overhead, but can lead to load imbalance."))
+            Lower values decrease management and memory overhead, but can lead to load imbalance.")
+            .takes_value(true))
         .arg(Arg::with_name(ARG_VERBOSE)
             .short("v")
             .long(ARG_VERBOSE)
             .help("Print intermediate results after each starting word has been handled by the \
-            search algorithm.")
-            .takes_value(false))
+            search algorithm."))
         .arg(Arg::with_name(ARG_QUICK_RESULTS)
             .long(ARG_QUICK_RESULTS)
             .help("Instead of internally sorting the words for fast completion, this flag sorts the \

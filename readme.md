@@ -47,6 +47,14 @@ Just try it out for some small workloads before giving it a long list.
 Note that because of reasons, the application won't accept lists longer 
 than 256 words. But that would take an eternity to calculate anyways, trust me.
 
+### Tips
+
+- Tweaking the value of the `--granularity` flag is pretty important. 
+Try finding a good value for small and intermediate workloads first and 
+increase that value for larger workloads.
+- The `--quick-results` switch really degrades the overall execution time, so 
+use it only when you can live with a good guess for the longest chain.
+
 ## Building
 
 You will need a more-or-less recent version of the rust toolchain, 
