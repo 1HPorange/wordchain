@@ -22,7 +22,7 @@ fn main() {
     let matches = App::new("wordchain")
         .version(crate_version!())
         .author("Markus Webel <m@rkus.online>")
-        .about("Finds the longest chain of non-repeating intersecting words in a file (1 word per line)")
+        .about("Finds the longest chain of non-repeating overlapping words in a file (1 word per line)")
         .arg(Arg::with_name(ARG_WORD_FILE)
             .index(1)
             .help("A file with all unique words to be considered, separated by line-breaks")
