@@ -35,7 +35,7 @@ fn main() {
         .arg(Arg::with_name(ARG_GRANULARITY)
             .short("g")
             .long(ARG_GRANULARITY)
-            .help("Set how many levels of recursion the task generation algorithm uses. \
+            .help("Set how many levels of recursion the task generation algorithm uses (0-255). \
             Lower values decrease management and memory overhead, but can lead to load imbalance."))
         .arg(Arg::with_name(ARG_VERBOSE)
             .short("v")
@@ -57,7 +57,7 @@ fn main() {
     });
 
     let granularity = if matches.is_present(ARG_GRANULARITY) {
-        Some(value_t_or_exit!(matches, ARG_GRANULARITY, usize))
+        Some(value_t_or_exit!(matches, ARG_GRANULARITY, u8))
     } else {
         None
     };

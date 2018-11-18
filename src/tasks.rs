@@ -5,11 +5,11 @@ use rayon::iter::repeat;
 pub fn create_chain_tasks(
     start_index: u8,
     connectivity_index_table: &ConnectivityIndexTable,
-    granularity: usize) -> Vec<Vec<u8>> {
+    granularity: u8) -> Vec<Vec<u8>> {
 
     let mut tasks = vec![vec![start_index]];
 
-    for _ in 1..granularity {
+    for _ in 0..granularity {
 
         let next_gen = tasks.par_iter()
             .flat_map(|t| {

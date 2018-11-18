@@ -16,7 +16,7 @@ pub struct Config {
     /// How many levels of recursion the task generation algorithm uses
     /// Lower values decrease management and memory overhead, but can lead to load imbalance
     /// Generally, larger workloads run faster with higher values.
-    pub granularity: Option<usize>,
+    pub granularity: Option<u8>,
 
     /// Whether to print intermediate results to std::out
     /// Recommended for long running tasks. Note that even with this flag, you might not see
@@ -51,13 +51,11 @@ pub fn find_longest_chain(words: Vec<String>, config: &Config) -> Result<ChainIn
 
 }
 
-fn validate_input(words: &Vec<String>, config: &Config) -> Result<(), &'static str> {
+fn validate_input(words: &Vec<String>, _config: &Config) -> Result<(), &'static str> {
 
     if words.len() > 256 {
         return Err("This algorithm is limited to 256 words. Please remove some words from your file.")
     };
-
-    // TODO: Validate config
 
     Ok(())
 }
