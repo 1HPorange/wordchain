@@ -80,11 +80,13 @@ To run as fast as possible, wordchain uses some optimizations:
 
 - never operates on strings directly, only byte-size vector indices
 - is non-recursive to avoid stack-related performance issues
-- is parallelized with a configurable granularity
+- is parallelized with a configurable granularity to avoid load-balancing issues
 - builds lookup structures up-front to avoid recalculation
 - sorts words heuristically to shorten expected runtime
 - runs entirely lock-free
 - uses bitmasks to emulate a hashset with perfect hashing, which is used to avoid cycles
+- uses safe estimates of longest chains with a specific first word to potentially abort 
+later words early
 
 ## Tasks
 
