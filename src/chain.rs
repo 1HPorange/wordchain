@@ -1,21 +1,24 @@
+use std::cmp;
 use rayon::prelude::*;
+use super::{tasks, words};
+use uint::U256;
 
 pub fn find_longest_chain_parallel(
-    follower_table: &Vec<Vec<u8>>,
-    granularity: u8,
+    connectivity_index_table: &Vec<Vec<u8>>,
     sorted_words: &Vec<String>,
-    verbose: bool) -> Vec<u8> {
+    config: &super::Config) -> Vec<u8> {
 
     let mut global_longest = Vec::new(); // MIN OPT: Guess length
 
-    let mut longest_estimates: Vec<Option<u8>> = vec![None; follower_table.len()];
+    let mut longest_estimates: Vec<Option<u8>> = vec![None; connectivity_index_table.len()];
 
-    for start_index in 0..follower_table.len() as u8 {
+    for start_index in 0..connectivity_index_table.len() as u8 {
 
-        let mut chains = tasks::;
+        // TODO: Replace const estimate here with a better guess here
+        let mut chains = tasks::create_chain_tasks(start_index, &connectivity_index_table, config.granularity.unwrap_or(6));
 
         let (local_longest, global_estimate) = chains.into_par_iter()
-            .map(|c| find_partial_longest_chain(c, &longest_estimates, &follower_table))
+            .map(|c| find_partial_longest_chain(c, &longest_estimates, &connectivity_index_table))
             .reduce(|| (Vec::new(), None), |(acc_longest, acc_estimate),(next_longest, next_estimate)| {
                 (if next_longest.len() > acc_longest.len() {
                     next_longest
@@ -30,12 +33,12 @@ pub fn find_longest_chain_parallel(
             global_longest = local_longest;
         }
 
-        if verbose {
+        if config.verbose {
             println!("Finished word {}/{} - Longest chain until now ({}):\n{}",
                      start_index as u16 + 1,
-                     follower_table.len(),
+                     connectivity_index_table.len(),
                      global_longest.len(),
-                     pretty_format_chain(&sorted_words, &global_longest));
+                     words::pretty_format_index_chain(&sorted_words, &global_longest));
         }
     };
 

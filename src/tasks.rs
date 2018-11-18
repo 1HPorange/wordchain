@@ -1,15 +1,21 @@
-pub fn create_chain_tasks(start_token: u8, connectivity_table: ConnectivityTable) {
+use std::iter;
+use super::connectivity::ConnectivityIndexTable;
 
-    vec![vec![start_index]];
+// TODO: Fix this abomination below...
+pub fn create_chain_tasks(
+    start_index: u8,
+    connectivity_index_table: &ConnectivityIndexTable,
+    granularity: usize) -> Vec<Vec<u8>> {
 
-    // TODO: Fix this abomination below...
-    for _ in 1..granularity { // TODO: Make this depth configurable or dependent on something smart
+    let mut chains = vec![vec![start_index]];
+
+    for _ in 1..granularity { // TODO: Use granularity correctly
 
         chains = chains.into_iter().flat_map(|v| {
 
             let last = *v.last().unwrap() as usize;
 
-            let legal_followers = follower_table[last].iter()
+            let legal_followers = connectivity_index_table[last].iter()
                 .filter(|i| !v.contains(i))
                 .map(ToOwned::to_owned)
                 .collect::<Vec<u8>>();
@@ -26,4 +32,6 @@ pub fn create_chain_tasks(start_token: u8, connectivity_table: ConnectivityTable
             }
         }).collect();
     }
+
+    chains
 }

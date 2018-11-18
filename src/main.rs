@@ -1,21 +1,13 @@
 #[macro_use]
 extern crate clap;
-extern crate uint;
-extern crate rayon;
-
 extern crate wordchain;
 
 use clap::{App, Arg};
-use std::path::Path;
 use std::io;
 use std::io::Read;
 use std::fs::File;
 use std::str;
-use std::collections::HashMap;
-use std::collections::HashSet;
-use std::time::{Duration, Instant};
-use uint::U256;
-use rayon::prelude::*;
+use std::time::Instant;
 
 use wordchain::SortingOrder;
 
@@ -83,7 +75,7 @@ fn main() {
 
     let before = Instant::now();
 
-    let longest_chain_info = wordchain::find_longest_chain(&words, &config).unwrap_or_else(|err| {
+    let longest_chain_info = wordchain::find_longest_chain(words, &config).unwrap_or_else(|err| {
         panic!("ERROR: {}", err);
     });
 

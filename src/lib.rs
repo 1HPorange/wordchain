@@ -1,8 +1,11 @@
 extern crate rayon;
+extern crate uint;
 
 mod words;
 mod connectivity;
 mod sorting;
+mod chain;
+mod tasks;
 
 pub use sorting::SortingOrder;
 
@@ -31,14 +34,21 @@ pub struct ChainInfo {
     pub chain: String
 }
 
-pub fn find_longest_chain(words: &Vec<String>, config: &Config) -> Result<ChainInfo, &'static str> {
+pub fn find_longest_chain(words: Vec<String>, config: &Config) -> Result<ChainInfo, &'static str> {
 
     validate_input(&words, &config)?;
 
-    // TODO: Replace with sth sensible
+    let connectivity_map = connectivity::create_connectivity_map(&words, config.min_overlap);
+
+    let words = sorting::sort_words(words, &connectivity_map, &config.sorting_order);
+
+    let connectivity_index_table = connectivity::create_connectivity_index_table(&words, &connectivity_map);
+
+    let longest_chain_indices = chain::find_longest_chain_parallel(&connectivity_index_table, &words, &config);
+
     Ok(ChainInfo{
-        len: 0,
-        chain: String::from("faggot")
+        len: longest_chain_indices.len() as u8,
+        chain: words::pretty_format_index_chain(&words, &longest_chain_indices)
     })
 
 }

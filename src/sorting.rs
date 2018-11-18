@@ -17,12 +17,24 @@ pub enum SortingOrder {
     ForFasterIntermediateResults
 }
 
-pub fn sort_words<F>(mut words: Vec<String>, follower_map: &ConnectivityMap, sorting_func: F) -> Vec<String> where
-    F: Fn(&WordRating, &WordRating) -> cmp::Ordering
+impl SortingOrder {
+    fn as_sorting_func(&self) -> Box<dyn Fn(&WordRating, &WordRating) -> cmp::Ordering> {
+
+        match self {
+            SortingOrder::ForFasterCompletion => Box::new(|a, b|
+                b.incoming.cmp(&a.incoming) // higher incoming
+                    .then(b.outgoing.cmp(&a.outgoing))), // higher outgoing
+
+            SortingOrder::ForFasterIntermediateResults => Box::new(|a, b|
+                a.incoming.cmp(&b.incoming) // lower incoming
+                    .then(a.outgoing.cmp(&b.outgoing))) // lower outgoing
+        }
+    }
+}
+
+pub fn sort_words(mut words: Vec<String>, follower_map: &ConnectivityMap, sorting_order: &SortingOrder) -> Vec<String>
 {
-    // - build or receive follower table
-    // - build word rating table
-    // - sort by the provided sorting function
+    let sorting_func = sorting_order.as_sorting_func();
 
     let calc_incoming = |left : &str| {
         follower_map.iter()
