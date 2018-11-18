@@ -1,0 +1,56 @@
+extern crate rayon;
+
+mod words;
+mod connectivity;
+mod sorting;
+
+pub use sorting::SortingOrder;
+
+pub struct Config {
+    /// How many characters are at least required to chain two words together
+    pub min_overlap: usize,
+
+    /// How many tasks are generated for each word before distributing them to threads
+    /// Lower values decrease management and memory overhead, but can lead to load imbalance
+    /// Generally, larger workloads run faster with higher values. The smallest recommended
+    /// value is the number of CPU Cores (+ Hyperthreads)
+    /// If None is passed, the crate will estimate a good value based on the number of input words
+    pub granularity: Option<usize>,
+
+    /// Whether to print intermediate results to std::out
+    /// Recommended for long running tasks. Note that even with this flag, you might not see
+    /// any output for a VERY long time.
+    pub verbose: bool,
+
+    /// Internal sorting strategy for the words (see: SortingOrder documentation)
+    pub sorting_order: SortingOrder
+}
+
+pub struct ChainInfo {
+    pub len: u8,
+    pub chain: String
+}
+
+pub fn find_longest_chain(words: &Vec<String>, config: &Config) -> Result<ChainInfo, &'static str> {
+
+    validate_input(&words, &config)?;
+
+    // TODO: Replace with sth sensible
+    Ok(ChainInfo{
+        len: 0,
+        chain: String::from("faggot")
+    })
+
+}
+
+fn validate_input(words: &Vec<String>, config: &Config) -> Result<(), &'static str> {
+
+    if words.len() > 256 {
+        return Err("This algorithm is limited to 256 words. Please remove some words from your file.")
+    };
+
+    // TODO: Validate config
+
+    Ok(())
+}
+
