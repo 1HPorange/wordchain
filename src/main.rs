@@ -35,7 +35,7 @@ fn main() {
         .arg(Arg::with_name(ARG_GRANULARITY)
             .short("g")
             .long(ARG_GRANULARITY)
-            .help("Sets how many tasks are generated for each word before distributing them to threads. \
+            .help("Set how many levels of recursion the task generation algorithm uses. \
             Lower values decrease management and memory overhead, but can lead to load imbalance."))
         .arg(Arg::with_name(ARG_VERBOSE)
             .short("v")
@@ -63,7 +63,7 @@ fn main() {
     };
 
     let config = wordchain::Config {
-        min_overlap: value_t!(matches, ARG_MIN_OVERLAP, usize).unwrap_or(1),
+        min_overlap: value_t_or_exit!(matches, ARG_MIN_OVERLAP, usize),
         granularity,
         verbose: matches.is_present(ARG_VERBOSE) || matches.is_present(ARG_QUICK_RESULTS),
         sorting_order: if matches.is_present(ARG_QUICK_RESULTS) {
