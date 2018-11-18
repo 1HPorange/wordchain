@@ -42,10 +42,10 @@ Isn't that just great?
 ## Usage
 
 The tool has pretty good command-line help text. Just try `wordchain -h`. 
-Just try it out for some small workloads before giving it a long list.
+Try it out for some small workloads before giving it a long list.
 
 Note that because of reasons, the application won't accept lists longer 
-than 256 words. But that would take an eternity to calculate anyways, trust me.
+than 256 words. But that would take an eternity to calculate anyway, trust me.
 
 ### Tips
 
@@ -70,7 +70,7 @@ The executable can be found in `target/release/`.
 
 For secret omega-turbo ultra-boost, consider compiling 
 specifically for your native environment by setting the 
-environment variable `RUSTFLAGS="-Ctarget-cpu=native"`. Just
+environment variable `RUSTFLAGS="-C target-cpu=native"`. Just
 remember to not share the executable after that, or your PC
 will explode.
 
@@ -88,4 +88,4 @@ To run as fast as possible, wordchain uses some optimizations:
 
 ## Tasks
 
-- [ ] Validate CL arguments. Right now I trust you. I shouldn't.
+- [x] Validate CL arguments. Right now I trust you. I shouldn't.
