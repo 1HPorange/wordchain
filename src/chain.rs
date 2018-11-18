@@ -14,7 +14,7 @@ pub fn find_longest_chain_parallel(
 
     for start_index in 0..connectivity_index_table.len() as u8 {
 
-        // TODO: Replace const estimate here with a better guess here
+        // TODO: Think about the constant value here and what to pass instead
         let mut chains = tasks::create_chain_tasks(start_index, &connectivity_index_table, config.granularity.unwrap_or(6));
 
         let (local_longest, global_estimate) = chains.into_par_iter()

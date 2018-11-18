@@ -13,11 +13,9 @@ pub struct Config {
     /// How many characters are at least required to chain two words together
     pub min_overlap: usize,
 
-    /// How many tasks are generated for each word before distributing them to threads
+    /// How many levels of recursion the task generation algorithm uses
     /// Lower values decrease management and memory overhead, but can lead to load imbalance
-    /// Generally, larger workloads run faster with higher values. The smallest recommended
-    /// value is the number of CPU Cores (+ Hyperthreads)
-    /// If None is passed, the crate will estimate a good value based on the number of input words
+    /// Generally, larger workloads run faster with higher values.
     pub granularity: Option<usize>,
 
     /// Whether to print intermediate results to std::out

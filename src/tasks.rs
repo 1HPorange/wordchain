@@ -1,37 +1,42 @@
-use std::iter;
 use super::connectivity::ConnectivityIndexTable;
+use rayon::prelude::*;
+use rayon::iter::repeat;
 
-// TODO: Fix this abomination below...
 pub fn create_chain_tasks(
     start_index: u8,
     connectivity_index_table: &ConnectivityIndexTable,
     granularity: usize) -> Vec<Vec<u8>> {
 
-    let mut chains = vec![vec![start_index]];
+    let mut tasks = vec![vec![start_index]];
 
-    for _ in 1..granularity { // TODO: Use granularity correctly
+    for _ in 1..granularity {
 
-        chains = chains.into_iter().flat_map(|v| {
+        let next_gen = tasks.par_iter()
+            .flat_map(|t| {
 
-            let last = *v.last().unwrap() as usize;
+                let last_index = *t.last().unwrap() as usize;
 
-            let legal_followers = connectivity_index_table[last].iter()
-                .filter(|i| !v.contains(i))
-                .map(ToOwned::to_owned)
-                .collect::<Vec<u8>>();
+                let followers = &connectivity_index_table[last_index].iter()
+                    .filter(|f| !t.contains(f))
+                    .map(ToOwned::to_owned)
+                    .collect::<Vec<_>>();
 
-            if 0 == legal_followers.len() {
-                vec![v] // TODO: Think about a better way to abort this
-                // TODO: Also, much more importantly, if there is even one longer chain with the same starter, we should not have a task for the shorter one
-            } else {
-                iter::repeat(v).zip(legal_followers)
-                    .map(|(mut l,r)| {
-                        l.push(r);
-                        l
-                    }).collect()
-            }
-        }).collect();
-    }
+                repeat(t)
+                    .zip(followers)
+                    .map(|(old, &next)| {
+                        let mut new = old.clone();
+                        new.push(next);
+                        new
+                    }).collect::<Vec<Vec<u8>>>()
 
-    chains
+            }).collect::<Vec<Vec<u8>>>();
+
+        if next_gen.len() > 0 {
+            tasks = next_gen;
+        } else {
+            break;
+        }
+    };
+
+    tasks
 }
