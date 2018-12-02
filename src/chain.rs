@@ -116,29 +116,3 @@ fn find_partial_longest_chain(
         }
     };
 }
-
-fn find_longest_montecarlo() {
-
-    // TODO: Move this to own module randomChain.rs
-
-    // TODO: Also try with uniform distribution and compare results
-
-    // TODO: This method doesn't need sorting. See that it doesn't get sorting!
-
-    // TODO: This method won't work with the quick-results and verbose flags. Think of sth!
-    // Maybe introduce a -m[ode] switch that can chose between those things
-
-    // Every thread has an internal list of (starter,longest)
-    // The starter list has a prob. distribution attached
-    // Also every follower table also has prob. distribution attached
-
-    // Use distribution to chose first
-    // Then do monte carlo
-    // At each step, use the distribution attached to the follower list to chose a follower
-
-    // mutex checks for global longest chain (local lookup copy of length)
-
-    // When new longest for a starter is discovered:
-    // Update starter list distribution
-    // Update every follower list distribution that the starter is in
-}

@@ -1,9 +1,11 @@
 extern crate rayon;
 extern crate uint;
+extern crate rand;
 
 mod words;
 mod connectivity;
 mod sorting;
+mod random_chain;
 mod chain;
 mod tasks;
 
