@@ -3,21 +3,65 @@ use super::words;
 use std::sync::{Mutex};
 use rand::rngs::SmallRng;
 use rand::prelude::*;
+use uint::U256;
 
 fn find_longest(
     connectivity_index_table: &Vec<Vec<u8>>,
     sorted_words: &Vec<String>,
     longest_global: Mutex<Vec<u8>>) {
 
-    let mut longest_known = vec![0u8; connectivity_index_table.len()];
+    // Actually contains (index, length - 1) so we can potentially store chains w/ length 256
+    let mut longest_known = (0u8..)
+        .zip(vec![0u8; connectivity_index_table.len()])
+        .collect::<Vec<_>>();
+
+    let mut longest_known_sum = 0u16;
+
+    // MIN OPT: Guess length
+    let mut chain: Vec<u8> = Vec::new();
 
     loop {
 
+        // Chose starter index randomly based on longest_known
+        let starter = rnd_elem(&longest_known, longest_known_sum);
 
+        // Clear chain and add starter
+        chain.clear();
+        chain.push(starter);
 
+        // Init chain mask
+        let chain_mask = U256::zero();
+
+        // Set current index to starter
+        let mut current = starter;
+
+        loop {
+            // Fetch follower table and filter to legal followers
+            let legal_followers =
+                connectivity_index_table[current as usize].iter()
+                .filter(|&&f| !chain_mask.bit(f as usize));
+
+            // Convert to index length pairs
+            let mut follower_len_pairs = legal_followers
+                .map(|&f| &longest_known[f as usize])
+                .peekable();
+
+            // Chose one randomly if result not empty, otherwise check longest and break
+            if follower_len_pairs.peek().is_some() {
+
+                let next = rnd_follower(follower_len_pairs);
+
+                // Add to chain and set current
+                chain.push(next);
+                current = next;
+
+            } else {
+                // TODO: Check longest
+
+                break
+            }
+        }
     }
-
-    // TODO: Move this to own module randomChain.rs
 
     // TODO: Also try with uniform distribution and compare results
 
@@ -45,26 +89,22 @@ fn find_longest(
     // Maybe think about doing this in the future (tm)
 }
 
-fn get_rnd_index<'a, I>(
-    rng: &mut SmallRng,
-    chain_lengths: I,
-    lengths_sum: u16) -> usize where
-    I: IntoIterator<Item = &'a u8> {
+fn rnd_elem<'a, I>(pairs: I, length_sum: u16) -> u8
+    where I: IntoIterator<Item = &'a (u8, u8)> { // 1. tuple element is index, 2. is length... yikes
 
-    // TODO: Try with uniform distrib. here
+    // TODO: Try boring old uniform distribution here
 
-    let target = rng.gen_range(1u16, lengths_sum);
+    0u8
 
-    let mut acc = 0u16;
-
-    for (i, &prob) in chain_lengths.into_iter().enumerate() {
-
-        acc += prob as u16;
-
-        if acc >= target {
-            return i;
-        }
-    }
-
-    panic!("Unreachable code")
 }
+
+/// Make sure not to call on empty iterator
+fn rnd_follower<'a, I>(followers: I) -> u8
+    where I: IntoIterator<Item = &'a (u8, u8)> + Clone { // 1. tuple element is index, 2. is length... yikes
+
+    let length_sum = followers.clone().into_iter().fold(0u16, |acc, &(_, l)| acc + l as u16);
+
+    rnd_elem(followers, length_sum)
+}
+
+
