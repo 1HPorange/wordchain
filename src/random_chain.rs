@@ -93,14 +93,16 @@ fn find_longest_internal(
                 current = next;
 
             } else {
-                let mut longest_global = longest_global.lock().unwrap();
+                {
+                    let mut longest_global = longest_global.lock().unwrap();
 
-                if chain.len() > longest_global.len() {
-                    *longest_global = chain.clone();
+                    if chain.len() > longest_global.len() {
+                        *longest_global = chain.clone();
 
-                    println!("Longest chain: {}: {}",
-                        chain.len(),
-                        pretty_format_index_chain(words, &chain));
+                        println!("Longest chain: {}: {}",
+                            chain.len(),
+                            pretty_format_index_chain(words, &chain));
+                    }
                 }
 
                 unsafe {
