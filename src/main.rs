@@ -9,8 +9,6 @@ use std::fs::File;
 use std::str;
 use std::time::Instant;
 
-use wordchain::SortingOrder;
-
 fn main() {
 
     const ARG_MIN_OVERLAP: &str = "min-overlap";

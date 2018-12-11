@@ -32,7 +32,7 @@ impl SortingOrder {
     }
 }
 
-pub fn sort_words(mut words: Vec<String>, follower_map: &ConnectivityMap, sorting_order: &SortingOrder) -> Vec<String>
+pub fn sort_words(mut words: Vec<String>, follower_map: &ConnectivityMap, sorting_order: SortingOrder) -> Vec<String>
 {
     let sorting_func = sorting_order.as_sorting_func();
 

@@ -6,7 +6,8 @@ use uint::U256;
 pub fn find_longest_chain_parallel(
     connectivity_index_table: &Vec<Vec<u8>>,
     sorted_words: &Vec<String>,
-    config: &super::Config) -> Vec<u8> {
+    granularity: Option<u8>,
+    verbose: bool) -> Vec<u8> {
 
     let mut global_longest = Vec::new(); // MIN OPT: Guess length
 
@@ -15,7 +16,7 @@ pub fn find_longest_chain_parallel(
     for start_index in 0..connectivity_index_table.len() as u8 {
 
         // TODO: Think about the constant value here and what to pass instead
-        let mut chains = tasks::create_chain_tasks(start_index, &connectivity_index_table, config.granularity.unwrap_or(6));
+        let mut chains = tasks::create_chain_tasks(start_index, &connectivity_index_table, granularity.unwrap_or(6));
 
         let (local_longest, global_estimate) = chains.into_par_iter()
             .map(|c| find_partial_longest_chain(c, &longest_estimates, &connectivity_index_table))
@@ -33,7 +34,7 @@ pub fn find_longest_chain_parallel(
             global_longest = local_longest;
         }
 
-        if config.verbose {
+        if verbose {
             println!("Finished word {}/{} - Longest chain until now ({}):\n{}",
                      start_index as u16 + 1,
                      connectivity_index_table.len(),
