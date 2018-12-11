@@ -1,5 +1,5 @@
 use rayon::prelude::*;
-use super::words;
+use super::words::pretty_format_index_chain;
 use std::sync::{Mutex};
 use rand::rngs::SmallRng;
 use rand::prelude::*;
@@ -58,7 +58,15 @@ fn find_longest(
                 current = next;
 
             } else {
-                // TODO: Check longest
+                let mut longest_global = longest_global.lock().unwrap();
+
+                if chain.len() > longest_global.len() {
+                    *longest_global = chain.clone();
+
+                    println!("Longest chain: {}: {}",
+                        chain.len(),
+                        pretty_format_index_chain(sorted_words, &chain));
+                }
 
                 break
             }
