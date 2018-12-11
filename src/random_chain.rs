@@ -1,21 +1,52 @@
-use rayon::prelude::*;
 use super::words::pretty_format_index_chain;
-use std::sync::{Mutex};
 use rand::rngs::SmallRng;
 use rand::prelude::*;
 use uint::U256;
+use std::thread;
+use std::sync::{Arc, Mutex};
+use std::cell::UnsafeCell;
 
-fn find_longest(
+pub fn find_longest(
+    connectivity_index_table: Vec<Vec<u8>>,
+    words: Vec<String>,) {
+
+    let words = Arc::new(words);
+    let cit = Arc::new(connectivity_index_table);
+    let longest_global = Arc::new(Mutex::new(Vec::new()));
+
+    for _ in 1..num_cpus::get() {
+
+        let words = Arc::clone(&words);
+        let cit = Arc::clone(&cit);
+        let longest_global = Arc::clone(&longest_global);
+
+        thread::spawn(move || {
+            find_longest_internal(
+                &*cit,
+                &*words,
+                &*longest_global
+            )
+        });
+    }
+
+    find_longest_internal(
+        &cit,
+        &words,
+        &*longest_global
+    )
+}
+
+fn find_longest_internal(
     connectivity_index_table: &Vec<Vec<u8>>,
-    sorted_words: &Vec<String>,
-    longest_global: Mutex<Vec<u8>>) {
+    words: &Vec<String>,
+    longest_global: &Mutex<Vec<u8>>) {
 
     let mut rng = SmallRng::from_entropy();
 
     // Actually contains (index, length - 1) so we can potentially store chains w/ length 256
-    let mut longest_known = (0u8..)
+    let longest_known = UnsafeCell::new((0u8..)
         .zip(vec![0u8; connectivity_index_table.len()])
-        .collect::<Vec<_>>();
+        .collect::<Vec<_>>());
 
     let mut longest_known_sum = 0u16;
 
@@ -25,7 +56,9 @@ fn find_longest(
     loop {
 
         // Chose starter index randomly based on longest_known
-        let starter = rnd_elem(&mut rng, &longest_known, longest_known_sum);
+        let starter = unsafe {
+             rnd_elem(&mut rng, &*longest_known.get(), longest_known_sum)
+        };
 
         // Clear chain and add starter
         chain.clear();
@@ -44,9 +77,11 @@ fn find_longest(
                 .filter(|&&f| !chain_mask.bit(f as usize));
 
             // Convert to index length pairs
-            let mut follower_len_pairs = legal_followers
-                .map(|&f| &longest_known[f as usize])
-                .peekable();
+            let mut follower_len_pairs = unsafe {
+                legal_followers
+                .map(|&f| &((&*longest_known.get())[f as usize]))
+                .peekable()
+            };
 
             // Chose one randomly if result not empty, otherwise check longest and break
             if follower_len_pairs.peek().is_some() {
@@ -65,38 +100,23 @@ fn find_longest(
 
                     println!("Longest chain: {}: {}",
                         chain.len(),
-                        pretty_format_index_chain(sorted_words, &chain));
+                        pretty_format_index_chain(words, &chain));
+                }
+
+                unsafe {
+                    let (_, longest_for_starter) = &mut ((*longest_known.get())[*chain.first().unwrap() as usize]);
+
+                    if chain.len() > *longest_for_starter as usize {
+                        longest_known_sum = longest_known_sum - *longest_for_starter as u16 + chain.len() as u16;
+                        *longest_for_starter = chain.len() as u8 - 1;
+
+                    }
                 }
 
                 break
             }
         }
     }
-
-    // TODO: Also try with uniform distribution and compare results
-
-    // TODO: This method doesn't need sorting. See that it doesn't get sorting!
-
-    // TODO: This method won't work with the quick-results and verbose flags. Think of sth!
-    // Maybe introduce a -m[ode] switch that can chose between those things
-
-    // Every thread has an internal list of (starter,longest).
-    // The starter list has a prob. distribution attached
-    // Also every follower table also has prob. distribution attached
-
-    // Use distribution to chose first
-    // Then do monte carlo
-    // At each step, use the distribution attached to the follower list to chose a follower
-
-    // mutex checks for global longest chain (local lookup copy of length)
-
-    // When new longest for a starter is discovered:
-    // Update starter list distribution
-    // Update every follower list distribution that the starter is in
-
-    // Note: We cannot re-sort the table bc. it's an INDEX table, but that would make stuff easier.
-    // We could for example map a half-normal distr. to the list index for faster "random" lookup
-    // Maybe think about doing this in the future (tm)
 }
 
 /// Make sure not to call on empty iterator
@@ -111,7 +131,7 @@ fn rnd_elem<'a, I>(rng: &mut SmallRng, pairs: I, length_sum: u16) -> u8
 
     for &(index,length) in pairs {
 
-        acc = acc + length as u16;
+        acc = acc + length as u16 + 1;
 
         if acc > target {
             return index;
