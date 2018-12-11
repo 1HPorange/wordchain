@@ -10,6 +10,8 @@ fn find_longest(
     sorted_words: &Vec<String>,
     longest_global: Mutex<Vec<u8>>) {
 
+    let mut rng = SmallRng::from_entropy();
+
     // Actually contains (index, length - 1) so we can potentially store chains w/ length 256
     let mut longest_known = (0u8..)
         .zip(vec![0u8; connectivity_index_table.len()])
@@ -23,7 +25,7 @@ fn find_longest(
     loop {
 
         // Chose starter index randomly based on longest_known
-        let starter = rnd_elem(&longest_known, longest_known_sum);
+        let starter = rnd_elem(&mut rng, &longest_known, longest_known_sum);
 
         // Clear chain and add starter
         chain.clear();
@@ -49,7 +51,7 @@ fn find_longest(
             // Chose one randomly if result not empty, otherwise check longest and break
             if follower_len_pairs.peek().is_some() {
 
-                let next = rnd_follower(follower_len_pairs);
+                let next = rnd_follower(&mut rng,follower_len_pairs);
 
                 // Add to chain and set current
                 chain.push(next);
@@ -89,22 +91,35 @@ fn find_longest(
     // Maybe think about doing this in the future (tm)
 }
 
-fn rnd_elem<'a, I>(pairs: I, length_sum: u16) -> u8
+/// Make sure not to call on empty iterator
+fn rnd_elem<'a, I>(rng: &mut SmallRng, pairs: I, length_sum: u16) -> u8
     where I: IntoIterator<Item = &'a (u8, u8)> { // 1. tuple element is index, 2. is length... yikes
 
     // TODO: Try boring old uniform distribution here
 
-    0u8
+    let target = rng.gen_range(1u16, length_sum + 1);
 
+    let mut acc = 1u16;
+
+    for &(index,length) in pairs {
+
+        acc = acc + length as u16;
+
+        if acc > target {
+            return index;
+        }
+    };
+
+    unreachable!();
 }
 
 /// Make sure not to call on empty iterator
-fn rnd_follower<'a, I>(followers: I) -> u8
+fn rnd_follower<'a, I>(rng: &mut SmallRng, followers: I) -> u8
     where I: IntoIterator<Item = &'a (u8, u8)> + Clone { // 1. tuple element is index, 2. is length... yikes
 
     let length_sum = followers.clone().into_iter().fold(0u16, |acc, &(_, l)| acc + l as u16);
 
-    rnd_elem(followers, length_sum)
+    rnd_elem(rng,followers, length_sum)
 }
 
 
