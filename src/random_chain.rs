@@ -110,7 +110,7 @@ fn find_longest_internal(
 
                     if chain.len() > *longest_for_starter as usize {
                         longest_known_sum = longest_known_sum - *longest_for_starter as u16 + chain.len() as u16;
-                        *longest_for_starter = chain.len() as u8 - 1;
+                        *longest_for_starter = (chain.len() - 1) as u8;
 
                     }
                 }
