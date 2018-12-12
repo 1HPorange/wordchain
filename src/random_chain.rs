@@ -66,7 +66,7 @@ fn find_longest_internal(
         chain.push(starter);
 
         // Init chain mask
-        let chain_mask = UnsafeCell::new(U256::zero());
+        let chain_mask = UnsafeCell::new(U256::one() << starter);
 
         // Set current index to starter
         let mut current = starter;
