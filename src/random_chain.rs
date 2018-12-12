@@ -48,7 +48,8 @@ fn find_longest_internal(
         .zip(vec![0u8; connectivity_index_table.len()])
         .collect::<Vec<_>>());
 
-    let mut longest_known_sum = 0u16;
+    // Actually contains the sum of the length, NOT length - 1
+    let mut longest_known_sum = connectivity_index_table.len() as u16;
 
     // MIN OPT: Guess length
     let mut chain: Vec<u8> = Vec::new();
@@ -65,16 +66,17 @@ fn find_longest_internal(
         chain.push(starter);
 
         // Init chain mask
-        let chain_mask = U256::zero();
+        let chain_mask = UnsafeCell::new(U256::zero());
 
         // Set current index to starter
         let mut current = starter;
 
         loop {
             // Fetch follower table and filter to legal followers
-            let legal_followers =
+            let legal_followers = unsafe {
                 connectivity_index_table[current as usize].iter()
-                .filter(|&&f| !chain_mask.bit(f as usize));
+                    .filter(|&&f| !(*chain_mask.get()).bit(f as usize))
+            };
 
             // Convert to index length pairs
             let mut follower_len_pairs = unsafe {
@@ -92,6 +94,10 @@ fn find_longest_internal(
                 chain.push(next);
                 current = next;
 
+                // Update bitmask
+                unsafe {
+                    *chain_mask.get() = *chain_mask.get() | U256::one() << next;
+                }
             } else {
                 {
                     let mut longest_global = longest_global.lock().unwrap();
@@ -109,7 +115,7 @@ fn find_longest_internal(
                     let (_, longest_for_starter) = &mut ((*longest_known.get())[*chain.first().unwrap() as usize]);
 
                     if chain.len() > *longest_for_starter as usize {
-                        longest_known_sum = longest_known_sum - *longest_for_starter as u16 + chain.len() as u16;
+                        longest_known_sum = longest_known_sum - *longest_for_starter as u16 + (chain.len() - 1) as u16;
                         *longest_for_starter = (chain.len() - 1) as u8;
 
                     }
@@ -140,6 +146,8 @@ fn rnd_elem<'a, I>(rng: &mut SmallRng, pairs: I, length_sum: u16) -> u8
         }
     };
 
+    println!("acc: {}, target: {}, length_sum: {}", acc, target, length_sum);
+
     unreachable!();
 }
 
@@ -147,7 +155,7 @@ fn rnd_elem<'a, I>(rng: &mut SmallRng, pairs: I, length_sum: u16) -> u8
 fn rnd_follower<'a, I>(rng: &mut SmallRng, followers: I) -> u8
     where I: IntoIterator<Item = &'a (u8, u8)> + Clone { // 1. tuple element is index, 2. is length... yikes
 
-    let length_sum = followers.clone().into_iter().fold(0u16, |acc, &(_, l)| acc + l as u16);
+    let length_sum = followers.clone().into_iter().fold(0u16, |acc, &(_, l)| acc + l as u16 + 1);
 
     rnd_elem(rng,followers, length_sum)
 }
