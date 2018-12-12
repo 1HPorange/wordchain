@@ -34,7 +34,7 @@ pub enum Mode<'a> {
     /// Normal execution, geared towards fastest definitive result
     Normal(&'a SortedSearchConfig),
 
-    /// Sacrifices execution time for better intermediate results, which are printed
+    /// Sacrifices execution time for better intermediate results which are printed during execution
     QuickEstimate(&'a SortedSearchConfig),
 
     /// Uses a heuristic search to guess the longest chain. Will never terminate and there is
