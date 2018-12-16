@@ -4,7 +4,6 @@ use rand::prelude::*;
 use uint::U256;
 use std::thread;
 use std::sync::{Arc, Mutex};
-use std::cell::UnsafeCell;
 
 pub fn find_longest(
     connectivity_index_table: Vec<Vec<u8>>,
@@ -44,9 +43,9 @@ fn find_longest_internal(
     let mut rng = SmallRng::from_entropy();
 
     // Actually contains (index, length - 1) so we can potentially store chains w/ length 256
-    let longest_known = UnsafeCell::new((0u8..)
+    let mut longest_known = (0u8..)
         .zip(vec![0u8; connectivity_index_table.len()])
-        .collect::<Vec<_>>());
+        .collect::<Vec<_>>();
 
     // Actually contains the sum of the length, NOT length - 1
     let mut longest_known_sum = connectivity_index_table.len() as u16;
@@ -60,77 +59,68 @@ fn find_longest_internal(
     loop {
 
         // Chose starter index randomly based on longest_known
-        let starter = unsafe {
-             rnd_elem(&mut rng, &*longest_known.get(), longest_known_sum)
-        };
+        let starter = rnd_elem(&mut rng, &longest_known, longest_known_sum);
 
-        // Clear chain and add starter
+        // Clear chain
         chain.clear();
-        chain.push(starter);
 
         // Init chain mask
-        let chain_mask = UnsafeCell::new(U256::one() << starter);
+        let mut chain_mask = U256::zero();
 
         // Set current index to starter
         let mut current = starter;
 
         loop {
+            // Add to chain
+            chain.push(current);
+
+            // Update bit-mask
+            chain_mask = chain_mask | U256::one() << current;
+
             // Fetch follower table and filter to legal followers
-            let legal_followers = unsafe {
+            let legal_followers =
                 connectivity_index_table[current as usize].iter()
-                    .filter(|&&f| !(*chain_mask.get()).bit(f as usize))
-            };
+                    .filter(|&&f| !chain_mask.bit(f as usize));
 
             // Convert to index length pairs
-            let mut follower_len_pairs = unsafe {
+            let mut follower_len_pairs =
                 legal_followers
-                .map(|&f| &((&*longest_known.get())[f as usize]))
-                .peekable()
-            };
+                .map(|&f| &longest_known[f as usize])
+                .peekable();
 
-            // Chose one randomly if result not empty, otherwise check longest and break
-            if follower_len_pairs.peek().is_some() {
-
-                let next = rnd_follower(&mut rng,follower_len_pairs);
-
-                // Add to chain and set current
-                chain.push(next);
-                current = next;
-
-                // Update bitmask
-                unsafe {
-                    *chain_mask.get() = *chain_mask.get() | U256::one() << next;
-                }
-            } else {
-
-                if chain.len() - 1 > longest_local as usize {
-
-                    let mut longest_global = longest_global.lock().unwrap();
-
-                    if chain.len() - 1 > *longest_global as usize {
-
-                        println!("Longest chain: {}: {}",
-                            chain.len(),
-                            pretty_format_index_chain(words, &chain));
-
-                        *longest_global = (chain.len() - 1) as u8;
-                    }
-
-                    longest_local = *longest_global;
-                }
-
-                unsafe {
-                    let (_, longest_for_starter) = &mut ((*longest_known.get())[*chain.first().unwrap() as usize]);
-
-                    if chain.len() > *longest_for_starter as usize {
-                        longest_known_sum = longest_known_sum - *longest_for_starter as u16 + (chain.len() - 1) as u16;
-                        *longest_for_starter = (chain.len() - 1) as u8;
-
-                    }
-                }
-
+            // break if there is no legal follower
+            if follower_len_pairs.peek().is_none() {
                 break
             }
+
+            current = rnd_follower(&mut rng,follower_len_pairs);
+        }
+
+        // We can't grow the chain, so now we check if it is the longest, and
+        // if we need to update our lookup table
+
+        if chain.len() - 1 > longest_local as usize {
+
+            let mut longest_global = longest_global.lock().unwrap();
+
+            if chain.len() - 1 > *longest_global as usize {
+
+                println!("Longest chain: {}: {}",
+                         chain.len(),
+                         pretty_format_index_chain(words, &chain));
+
+                *longest_global = (chain.len() - 1) as u8;
+            }
+
+            longest_local = *longest_global;
+        }
+
+        let (_, longest_for_starter) = &mut longest_known[*chain.first().unwrap() as usize];
+
+        if chain.len() - 1 > *longest_for_starter as usize {
+            longest_known_sum = longest_known_sum - *longest_for_starter as u16 + (chain.len() - 1) as u16;
+            *longest_for_starter = (chain.len() - 1) as u8;
+
         }
     }
 }
