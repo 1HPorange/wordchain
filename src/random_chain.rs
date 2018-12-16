@@ -12,7 +12,7 @@ pub fn find_longest(
 
     let words = Arc::new(words);
     let cit = Arc::new(connectivity_index_table);
-    let longest_global = Arc::new(Mutex::new(Vec::new()));
+    let longest_global = Arc::new(Mutex::new(0u8));
 
     for _ in 1..num_cpus::get() {
 
@@ -39,7 +39,7 @@ pub fn find_longest(
 fn find_longest_internal(
     connectivity_index_table: &Vec<Vec<u8>>,
     words: &Vec<String>,
-    longest_global: &Mutex<Vec<u8>>) {
+    longest_global: &Mutex<u8>) {
 
     let mut rng = SmallRng::from_entropy();
 
@@ -53,6 +53,9 @@ fn find_longest_internal(
 
     // MIN OPT: Guess length
     let mut chain: Vec<u8> = Vec::new();
+
+    // Local longest chain length - 1, used so we don't have to acquire the mutex as often
+    let mut longest_local = 0u8;
 
     loop {
 
@@ -99,16 +102,21 @@ fn find_longest_internal(
                     *chain_mask.get() = *chain_mask.get() | U256::one() << next;
                 }
             } else {
-                {
+
+                if chain.len() - 1 > longest_local as usize {
+
                     let mut longest_global = longest_global.lock().unwrap();
 
-                    if chain.len() > longest_global.len() {
-                        *longest_global = chain.clone();
+                    if chain.len() - 1 > *longest_global as usize {
 
                         println!("Longest chain: {}: {}",
                             chain.len(),
                             pretty_format_index_chain(words, &chain));
+
+                        *longest_global = (chain.len() - 1) as u8;
                     }
+
+                    longest_local = *longest_global;
                 }
 
                 unsafe {
