@@ -22,6 +22,7 @@ const ARG_MIN_OVERLAP: &str = "min-overlap";
 const ARG_WORD_FILE: &str = "word-file";
 const ARG_MODE: &str = "mode";
 const ARG_GRANULARITY: &str = "granularity";
+const ARG_VERBOSE: &str = "verbose";
 
 fn main() {
 
@@ -44,8 +45,9 @@ fn main() {
             .default_value("normal")
             .possible_values(&Mode::variants())
             .help("The search algorithm that is used. Normal mode aims for fastest completion, but gives no intermediate results. \
-            Quick estimation mode sacrifices execution time for longer intermediate results, which are instantly printed. Random mode \
-            never terminates and uses heuristic search to guess the longest chain. This mode is NOT guaranteed to find the correct result."))
+            Quick estimation mode sacrifices execution time for longer intermediate results, which are printed as soon as they are \
+            available. Random mode never terminates and uses heuristic search to guess the longest chain. This mode is NOT guaranteed \
+            to find the correct result."))
         .arg(Arg::with_name(ARG_GRANULARITY)
             .short("g")
             .long(ARG_GRANULARITY)
@@ -53,6 +55,10 @@ fn main() {
             .help("Determines the granularity of tasks that are distributed to each thread. Usually a fairly small value (~6) is enough \
             to get good load balancing, but higher values might be beneficial for large workloads. If this argument is omitted, a default \
             value will be used. This argument is not permitted in random mode."))
+        .arg(Arg::with_name(ARG_VERBOSE)
+            .short("v")
+            .long(ARG_VERBOSE)
+            .help("Enables more detailed intermediate output."))
         .get_matches();
 
     let word_file = matches.value_of(ARG_WORD_FILE).unwrap();
@@ -96,7 +102,9 @@ fn exec_sorted_search(
         None
     };
 
-    let search_config = SortedSearchConfig { granularity };
+    let verbose = matches.is_present(ARG_VERBOSE);
+
+    let search_config = SortedSearchConfig { granularity, verbose };
 
     let lib_mode = match mode {
         Mode::normal => wordchain::Mode::Normal(&search_config),
@@ -130,6 +138,10 @@ fn exec_random_search(
 
     if matches.is_present(ARG_GRANULARITY) {
         panic!("Cannot specify granularity when operating in random mode");
+    }
+
+    if matches.is_present(ARG_VERBOSE) {
+        panic!("Verbose mode is not available when operating in random mode");
     }
 
     let config = Config {

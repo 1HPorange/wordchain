@@ -27,6 +27,8 @@ pub struct SortedSearchConfig {
     /// Generally, larger workloads run faster with higher values.
     pub granularity: Option<u8>,
 
+    /// Enables more detailed intermediate output
+    pub verbose: bool
 }
 
 pub enum Mode<'a> {
@@ -84,7 +86,6 @@ fn start_sorted_search(
         len: longest_chain_indices.len() as u8,
         chain: words::pretty_format_index_chain(&words, &longest_chain_indices)
     })
-
 }
 
 fn start_random_search(words: Vec<String>, connectivity_map: &connectivity::ConnectivityMap)
