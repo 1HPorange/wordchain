@@ -19,7 +19,21 @@ pub fn find_longest_chain_parallel(
         let mut chains = tasks::create_chain_tasks(start_index, &connectivity_index_table, granularity.unwrap_or(6));
 
         let (local_longest, global_estimate) = chains.into_par_iter()
-            .map(|c| find_partial_longest_chain(c, &longest_estimates, &connectivity_index_table))
+            .map(|c| {
+
+                if verbose {
+                    let orig_chain = c.clone();
+
+                    let chain = find_partial_longest_chain(c, &longest_estimates, &connectivity_index_table);
+                    
+                    println!("Finished longest chain search for initial chain {}",
+                             words::pretty_format_index_chain(&sorted_words, &orig_chain));
+
+                    chain
+                } else {
+                    find_partial_longest_chain(c, &longest_estimates, &connectivity_index_table)
+                }
+            })
             .reduce(|| (Vec::new(), None), |(acc_longest, acc_estimate),(next_longest, next_estimate)| {
                 (if next_longest.len() > acc_longest.len() {
                     next_longest
@@ -34,13 +48,12 @@ pub fn find_longest_chain_parallel(
             global_longest = local_longest;
         }
 
-        if verbose {
-            println!("Finished word {}/{} - Longest chain until now ({}):\n{}",
-                     start_index as u16 + 1,
-                     connectivity_index_table.len(),
-                     global_longest.len(),
-                     words::pretty_format_index_chain(&sorted_words, &global_longest));
-        }
+        println!("Finished word {}/{} - Longest chain until now ({}): {}",
+                 start_index as u16 + 1,
+                 connectivity_index_table.len(),
+                 global_longest.len(),
+                 words::pretty_format_index_chain(&sorted_words, &global_longest));
+
     };
 
     global_longest

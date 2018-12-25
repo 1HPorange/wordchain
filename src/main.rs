@@ -53,8 +53,8 @@ fn main() {
             .long(ARG_GRANULARITY)
             .takes_value(true)
             .help("Determines the granularity of tasks that are distributed to each thread. Usually a fairly small value (~6) is enough \
-            to get good load balancing, but higher values might be beneficial for large workloads. If this argument is omitted, a default \
-            value will be used. This argument is not permitted in random mode."))
+            to get good load balancing, but higher values might be beneficial for large workloads. This argument also affects logging granularity \
+            when --verbose is used. If this argument is omitted, a default value will be used. This argument is not permitted in random mode."))
         .arg(Arg::with_name(ARG_VERBOSE)
             .short("v")
             .long(ARG_VERBOSE)

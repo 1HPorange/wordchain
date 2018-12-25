@@ -58,10 +58,10 @@ pub fn find_longest_chain(words: Vec<String>, config: &Config) -> Result<ChainIn
     match config.mode {
 
         Mode::Normal(ssc) =>
-            start_sorted_search(words, &connectivity_map, ssc, SortingOrder::ForFasterCompletion, false),
+            start_sorted_search(words, &connectivity_map, ssc, SortingOrder::ForFasterCompletion),
 
         Mode::QuickEstimate(ssc) =>
-            start_sorted_search(words, &connectivity_map, ssc, SortingOrder::ForFasterIntermediateResults, true),
+            start_sorted_search(words, &connectivity_map, ssc, SortingOrder::ForFasterIntermediateResults),
 
         Mode::RandomSearch =>
             start_random_search(words, &connectivity_map)
@@ -72,15 +72,18 @@ fn start_sorted_search(
     words: Vec<String>,
     connectivity_map: &connectivity::ConnectivityMap,
     sorted_search_config: &SortedSearchConfig,
-    sorting_order: SortingOrder,
-    verbose: bool)
+    sorting_order: SortingOrder)
     -> Result<ChainInfo, &'static str> {
 
     let words = sorting::sort_words(words, &connectivity_map, sorting_order);
 
     let connectivity_index_table = connectivity::create_connectivity_index_table(&words, &connectivity_map);
 
-    let longest_chain_indices = chain::find_longest_chain_parallel(&connectivity_index_table, &words, sorted_search_config.granularity, verbose);
+    let longest_chain_indices = chain::find_longest_chain_parallel(
+        &connectivity_index_table,
+        &words,
+        sorted_search_config.granularity,
+        sorted_search_config.verbose);
 
     Ok(ChainInfo{
         len: longest_chain_indices.len() as u8,
