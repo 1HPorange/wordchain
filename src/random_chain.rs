@@ -10,34 +10,89 @@ pub fn find_longest(
     words: Vec<String>) {
 
     // Setup shared resources
+    let follower_table = create_extended_follower_table(&connectivity_index_table);
+    let words = Arc::new(words);
 
     for _ in 1..num_cpus::get() {
 
         // Copy/clone shared resources
+        let follower_table = follower_table.clone();
+        let words = Arc::clone(words);
+        let rng =
 
         // Start search thread
-
+        thread::spawn(move || find_longest_thread(follower_table, words));
     }
 
     // Start search on this thread
+    find_longest_thread(follower_table, words);
 }
 
-fn find_longest_thread() {
+fn find_longest_thread<R>(
+    follower_table: &mut Vec<Vec<Follower>>,
+    words: Vec<String>,
+    rng: &R)
+    where R: Rng {
 
     // One-time setup
+    let mut average_chain_lens = vec![0f32; follower_table.len()];
+    let mut chain = Vec::new(); // TODO: Check Type PERF: Guess size
+    let mut chain_mask: U256;
 
     loop {
 
-        // Starter setup
+        // Reset per-chain resources
+        let mut latest = pick_random_starter(&average_chain_lens);
+        chain_mask = U256::one() << latest;
+        chain.clear();
 
-        loop {
+        loop { // Chain growing
 
-            // Chain growing
+            let followers = filter_legal_followers(&chain_mask, &follower_table[latest as usize]);
 
+            if followers.peek().is_some() {
+
+                latest = pick_random_follower(&legal_followers);
+                chain_mask = chain_mask | U256::one() << latest;
+                chain.push(latest);
+
+            } else {
+                break
+            }
         }
 
-        // Result evaluation
+        let safe_len = (chain.len() - 1) as u8;
+
+        // Update starter average length
+        rolling_average_update(&mut average_chain_lens[latest], safe_len);
+
+        // ... and the average length of each pair in the chain
+        update_follower_averages(&mut follower_table, &chain, safe_len);
     }
+}
+
+struct Follower {
+
+    follower_index: u8,
+
+    /// The average chain length for the PAIR of words where this word is the follower
+    average_chain_len_pair: f32 // Think about f64
+
+}
+
+fn create_extended_follower_table(connectivity_index_table: &Vec<Vec<u8>>) -> Vec<Vec<Follower>> {
+
+    connectivity_index_table.iter().map(|followers| {
+
+            followers.iter().map(|&follower| {
+                Follower {
+                    follower_index: follower,
+                    average_chain_len_pair: 1f32 // todo: see if we should use better estimate here
+                }
+            }).collect()
+
+        }).collect()
+
 }
 
 //pub fn find_longest(
