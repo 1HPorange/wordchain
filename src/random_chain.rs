@@ -10,22 +10,24 @@ pub fn find_longest(
     words: Vec<String>) {
 
     // Setup shared resources
-    let follower_table = create_extended_follower_table(&connectivity_index_table);
+    let mut follower_table = create_extended_follower_table(&connectivity_index_table);
     let words = Arc::new(words);
 
     for _ in 1..num_cpus::get() {
 
         // Copy/clone shared resources
-        let follower_table = follower_table.clone();
+        let mut follower_table = follower_table.clone();
         let words = Arc::clone(words);
-        let rng =
+        let rng = SmallRng::from_entropy();
 
         // Start search thread
-        thread::spawn(move || find_longest_thread(follower_table, words));
+        thread::spawn(move || find_longest_thread(&mut follower_table, words, rng));
     }
 
     // Start search on this thread
-    find_longest_thread(follower_table, words);
+    let rng = SmallRng::from_entropy();
+
+    find_longest_thread(&mut follower_table, words, &rng);
 }
 
 fn find_longest_thread<R>(
@@ -48,7 +50,10 @@ fn find_longest_thread<R>(
 
         loop { // Chain growing
 
-            let followers = filter_legal_followers(&chain_mask, &follower_table[latest as usize]);
+            let mut followers = (&follower_table[latest as usize])
+                .iter()
+                .filter(|&follower| !chain_mask.bit(follower.follower_index as usize))
+                .peekable();
 
             if followers.peek().is_some() {
 
@@ -67,7 +72,7 @@ fn find_longest_thread<R>(
         rolling_average_update(&mut average_chain_lens[latest], safe_len);
 
         // ... and the average length of each pair in the chain
-        update_follower_averages(&mut follower_table, &chain, safe_len);
+        update_follower_averages(follower_table, &chain, safe_len);
     }
 }
 
@@ -92,7 +97,13 @@ fn create_extended_follower_table(connectivity_index_table: &Vec<Vec<u8>>) -> Ve
             }).collect()
 
         }).collect()
+}
 
+fn rolling_average_update(current: &mut f32, new_sample: u8) {
+
+    const CONVERGENCE_RATE: f32 = 0.05; // TODO: Investigate other values
+
+    *current = current + CONVERGENCE_RATE * (x - current);
 }
 
 //pub fn find_longest(
