@@ -37,8 +37,8 @@ fn find_longest_thread<R>(
     where R: Rng {
 
     // One-time setup
-    let mut average_chain_lens = vec![0f32; follower_table.len()];
-    let mut chain: Vec<u8> = Vec::new(); // TODO: Check Type PERF: Guess size
+    let mut average_chain_lens = vec![1f32; follower_table.len()]; // todo: see if we should use better estimate here
+    let mut chain: Vec<u8> = Vec::new(); // PERF: Guess size
     let mut chain_mask: U256;
 
     loop {
@@ -66,13 +66,13 @@ fn find_longest_thread<R>(
             }
         }
 
-        let safe_len = (chain.len() - 1) as u8;
+        let chain_flen = chain.len() as f32;
 
         // Update starter average length
-        rolling_average_update(&mut average_chain_lens[latest], safe_len);
+        rolling_average_update(&mut average_chain_lens[latest], chain_flen);
 
         // ... and the average length of each pair in the chain
-        update_follower_averages(follower_table, &chain, safe_len);
+        update_follower_averages(follower_table, &chain, chain_flen);
     }
 }
 
@@ -99,7 +99,7 @@ fn create_extended_follower_table(connectivity_index_table: &Vec<Vec<u8>>) -> Ve
         }).collect()
 }
 
-fn rolling_average_update(current: &mut f32, new_sample: u8) {
+fn rolling_average_update(current: &mut f32, new_sample: f32) {
 
     const CONVERGENCE_RATE: f32 = 0.05; // TODO: Investigate other values
 
@@ -109,7 +109,7 @@ fn rolling_average_update(current: &mut f32, new_sample: u8) {
 fn update_follower_averages(
     followers: &mut Vec<Vec<Follower>>,
     chain: &Vec<u8>,
-    new_sample: u8) {
+    new_sample: f32) {
 
     for &[a, b] in chain.windows(2) {
 
