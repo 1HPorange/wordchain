@@ -47,19 +47,20 @@ fn find_longest_thread<R>(
     let mut longest_len_local = 0usize; // PERF: Maybe u8?
 
     let mut chain: Vec<u8> = Vec::new(); // PERF: Guess size
-    let mut chain_mask: U256;
 
     loop {
 
         // Reset per-chain resources
         let mut latest = pick_random_follower_with_sum(&*starter_table, average_chain_lens_sum, rng);
 
+        let mut chain_mask = U256::zero();
+
         chain.clear();
         chain.push(latest);
 
         loop { // Chain growing
 
-            chain_mask = U256::one() << latest;
+            chain_mask = chain_mask | U256::one() << latest;
 
             let mut followers = (&mut follower_table[latest as usize])
                 .iter()
