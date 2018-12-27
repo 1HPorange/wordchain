@@ -79,7 +79,7 @@ fn find_longest_thread<R>(
 
         if chain.len() > longest_len_local {
 
-            let longest_global = longest_len_global.lock().unwrap();
+            let mut longest_global = longest_len_global.lock().unwrap();
 
             if chain.len() > *longest_global {
 
@@ -87,11 +87,10 @@ fn find_longest_thread<R>(
                     chain.len(),
                     pretty_format_index_chain(&words, &chain));
 
-                longest_len_local = *longest_global;
-
-            } else {
-                longest_len_local = chain.len();
+                *longest_global = chain.len();
             }
+
+            longest_len_local = *longest_global;
         }
 
         // Update per-chain lookups with new evidence
