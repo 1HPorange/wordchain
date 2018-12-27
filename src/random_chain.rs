@@ -80,7 +80,7 @@ fn find_longest_thread<R>(
         let chain_flen = chain.len() as f32;
 
         // Update starter average length
-        // TODO: do that
+        rolling_average_update(&mut starter_table[chain[0] as usize].average_chain_len_pair, chain_flen);
 
         // Re-calculate sum of average chain lengths for starters
         average_chain_lens_sum = starter_table.iter()
