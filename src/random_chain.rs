@@ -10,6 +10,7 @@ pub fn find_longest(
     words: Vec<String>) {
 
     // Setup shared resources
+    let longest_len_global = Arc::new(Mutex::new(0usize)); // PERF: Maybe u8?
     let mut starter_table = create_starter_table(&connectivity_index_table);
     let mut follower_table = create_follower_table(&connectivity_index_table);
     let words = Arc::new(words);
@@ -17,22 +18,24 @@ pub fn find_longest(
     for _ in 1..num_cpus::get() {
 
         // Copy/clone shared resources
+        let longest_len_global = Arc::clone(&longest_len_global);
         let mut starter_table = starter_table.clone();
         let mut follower_table = follower_table.clone();
         let words = Arc::clone(&words);
         let mut rng = SmallRng::from_entropy();
 
         // Start search thread
-        thread::spawn(move || find_longest_thread(&mut starter_table, &mut follower_table, &*words, &mut rng));
+        thread::spawn(move || find_longest_thread(&*longest_len_global, &mut starter_table, &mut follower_table, &*words, &mut rng));
     }
 
     // Start search on this thread
     let mut rng = SmallRng::from_entropy();
 
-    find_longest_thread( &mut starter_table, &mut follower_table, &*words, &mut rng);
+    find_longest_thread(&*longest_len_global, &mut starter_table, &mut follower_table, &*words, &mut rng);
 }
 
 fn find_longest_thread<R>(
+    longest_len_global: &Mutex<usize>,
     starter_table: &mut Vec<Follower>,
     follower_table: &mut Vec<Vec<Follower>>,
     words: &Vec<String>,
@@ -41,6 +44,7 @@ fn find_longest_thread<R>(
 
     // One-time setup
     let mut average_chain_lens_sum = starter_table.len() as f32;
+    let mut longest_len_local = 0usize; // PERF: Maybe u8?
 
     let mut chain: Vec<u8> = Vec::new(); // PERF: Guess size
     let mut chain_mask: U256;
@@ -73,7 +77,22 @@ fn find_longest_thread<R>(
             }
         }
 
-        // TODO: Care about longest chain (mutex w/ local hint)
+        if chain.len() > longest_len_local {
+
+            let longest_global = longest_len_global.lock().unwrap();
+
+            if chain.len() > *longest_global {
+
+                println!("Longest chain ({}): {}",
+                    chain.len(),
+                    pretty_format_index_chain(&words, &chain));
+
+                longest_len_local = *longest_global;
+
+            } else {
+                longest_len_local = chain.len();
+            }
+        }
 
         // Update per-chain lookups with new evidence
 
