@@ -10,27 +10,30 @@ pub fn find_longest(
     words: Vec<String>) {
 
     // Setup shared resources
-    let mut follower_table = create_extended_follower_table(&connectivity_index_table);
+    let mut starter_table = create_starter_table(&connectivity_index_table);
+    let mut follower_table = create_follower_table(&connectivity_index_table);
     let words = Arc::new(words);
 
     for _ in 1..num_cpus::get() {
 
         // Copy/clone shared resources
+        let mut starter_table = starter_table.clone();
         let mut follower_table = follower_table.clone();
         let words = Arc::clone(words);
         let rng = SmallRng::from_entropy();
 
         // Start search thread
-        thread::spawn(move || find_longest_thread(&mut follower_table, words, rng));
+        thread::spawn(move || find_longest_thread(&mut starter_table, &mut follower_table, words, rng));
     }
 
     // Start search on this thread
     let rng = SmallRng::from_entropy();
 
-    find_longest_thread(&mut follower_table, words, &rng);
+    find_longest_thread( &mut starter_table, &mut follower_table, words, &rng);
 }
 
 fn find_longest_thread<R>(
+    starter_table: &mut Vec<Follower>,
     follower_table: &mut Vec<Vec<Follower>>,
     words: Vec<String>,
     rng: &R)
@@ -90,7 +93,13 @@ struct Follower {
 
 }
 
-fn create_extended_follower_table(connectivity_index_table: &Vec<Vec<u8>>) -> Vec<Vec<Follower>> {
+fn create_starter_table(connectivity_index_table: &Vec<Vec<u8>>) -> Vec<Follower> {
+
+
+
+}
+
+fn create_follower_table(connectivity_index_table: &Vec<Vec<u8>>) -> Vec<Vec<Follower>> {
 
     connectivity_index_table.iter().map(|followers| {
 
@@ -109,6 +118,18 @@ fn rolling_average_update(current: &mut f32, new_sample: f32) {
     const CONVERGENCE_RATE: f32 = 0.05; // TODO: Investigate other values
 
     *current = current + CONVERGENCE_RATE * (x - current);
+}
+
+fn pick_random_starter() -> u8 {
+
+    unimplemented!()
+
+}
+
+fn pick_random_follower<I>() -> u8 {
+
+    unimplemented!()
+
 }
 
 fn update_follower_averages(
