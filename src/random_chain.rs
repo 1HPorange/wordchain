@@ -78,6 +78,7 @@ fn find_longest_thread<R>(
             }
         }
 
+        // Check for longest chain TODO: Factor this thing out
         if chain.len() > longest_len_local {
 
             let mut longest_global = longest_len_global.lock().unwrap();
