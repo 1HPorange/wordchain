@@ -19,29 +19,28 @@ pub fn find_longest(
         // Copy/clone shared resources
         let mut starter_table = starter_table.clone();
         let mut follower_table = follower_table.clone();
-        let words = Arc::clone(words);
-        let rng = SmallRng::from_entropy();
+        let words = Arc::clone(&words);
+        let mut rng = SmallRng::from_entropy();
 
         // Start search thread
-        thread::spawn(move || find_longest_thread(&mut starter_table, &mut follower_table, words, rng));
+        thread::spawn(move || find_longest_thread(&mut starter_table, &mut follower_table, &*words, &mut rng));
     }
 
     // Start search on this thread
-    let rng = SmallRng::from_entropy();
+    let mut rng = SmallRng::from_entropy();
 
-    find_longest_thread( &mut starter_table, &mut follower_table, words, &rng);
+    find_longest_thread( &mut starter_table, &mut follower_table, &*words, &mut rng);
 }
 
 fn find_longest_thread<R>(
     starter_table: &mut Vec<Follower>,
     follower_table: &mut Vec<Vec<Follower>>,
-    words: Vec<String>,
-    rng: &R)
+    words: &Vec<String>,
+    rng: &mut R)
     where R: Rng {
 
     // One-time setup
-    let mut average_chain_lens = vec![1f32; follower_table.len()]; // todo: see if we should use better estimate here
-    let mut average_chain_lens_sum = average_chain_lens.len() as f32;
+    let mut average_chain_lens_sum = starter_table.len() as f32;
 
     let mut chain: Vec<u8> = Vec::new(); // PERF: Guess size
     let mut chain_mask: U256;
@@ -49,21 +48,24 @@ fn find_longest_thread<R>(
     loop {
 
         // Reset per-chain resources
-        let mut latest = pick_random_starter(&average_chain_lens);
-        chain_mask = U256::one() << latest;
+        let mut latest = pick_random_follower_with_sum(&*starter_table, average_chain_lens_sum, rng);
+
         chain.clear();
+        chain.push(latest);
 
         loop { // Chain growing
 
-            let mut followers = (&follower_table[latest as usize])
+            chain_mask = U256::one() << latest;
+
+            let mut followers = (&mut follower_table[latest as usize])
                 .iter()
                 .filter(|&follower| !chain_mask.bit(follower.follower_index as usize))
                 .peekable();
 
             if followers.peek().is_some() {
 
-                latest = pick_random_follower(&legal_followers);
-                chain_mask = chain_mask | U256::one() << latest;
+                latest = pick_random_follower(followers, rng);
+
                 chain.push(latest);
 
             } else {
@@ -71,19 +73,26 @@ fn find_longest_thread<R>(
             }
         }
 
+        // TODO: Care about longest chain (mutex w/ local hint)
+
+        // Update per-chain lookups with new evidence
+
         let chain_flen = chain.len() as f32;
 
         // Update starter average length
-        rolling_average_update(&mut average_chain_lens[latest], chain_flen);
+        // TODO: do that
 
         // Re-calculate sum of average chain lengths for starters
-        average_chain_lens_sum = average_chain_lens.iter().sum();
+        average_chain_lens_sum = starter_table.iter()
+            .map(|f| f.average_chain_len_pair)
+            .sum();
 
         // ... and the average length of each pair in the chain
         update_follower_averages(follower_table, &chain, chain_flen);
     }
 }
 
+#[derive(Clone)]
 struct Follower {
 
     follower_index: u8,
@@ -95,7 +104,7 @@ struct Follower {
 
 fn create_starter_table(connectivity_index_table: &Vec<Vec<u8>>) -> Vec<Follower> {
 
-    (0..=(connectivity_index_table.len()  as u8)).iter()
+    (0..(connectivity_index_table.len() as u8))
         .map(|i| {
             Follower {
                 follower_index: i,
@@ -113,7 +122,7 @@ fn create_follower_table(connectivity_index_table: &Vec<Vec<u8>>) -> Vec<Vec<Fol
             followers.iter().map(|&follower| {
                 Follower {
                     follower_index: follower,
-                    average_chain_len_pair: 1f32 // todo: see if we should use better estimate here
+                    average_chain_len_pair: 1f32
                 }
             }).collect()
 
@@ -124,19 +133,38 @@ fn rolling_average_update(current: &mut f32, new_sample: f32) {
 
     const CONVERGENCE_RATE: f32 = 0.05; // TODO: Investigate other values
 
-    *current = current + CONVERGENCE_RATE * (x - current);
+    *current = *current + CONVERGENCE_RATE * (new_sample - *current);
 }
 
-fn pick_random_starter() -> u8 {
+fn pick_random_follower_with_sum<'a, I, R>(starters: I, starter_avg_sum: f32, rng: &mut R) -> u8 where
+    I: IntoIterator<Item=&'a Follower>,
+    R: Rng {
 
-    unimplemented!()
+    let target = rng.gen_range(0f32, starter_avg_sum);
 
+    let mut acc = 0f32;
+
+    for follower in starters {
+
+        let next_acc = acc + follower.average_chain_len_pair;
+
+        if next_acc > target {
+            return follower.follower_index;
+        }
+
+        acc = next_acc;
+    };
+
+    unreachable!()
 }
 
-fn pick_random_follower<I>() -> u8 {
+fn pick_random_follower<'a, I, R>(followers: I, rng: &mut R) -> u8 where
+    I: IntoIterator<Item=&'a Follower> + Clone,
+    R: Rng {
 
-    unimplemented!()
+    let avg_sum = followers.clone().into_iter().map(|f| f.average_chain_len_pair).sum();
 
+    pick_random_follower_with_sum(followers, avg_sum, rng)
 }
 
 fn update_follower_averages(
@@ -144,12 +172,18 @@ fn update_follower_averages(
     chain: &Vec<u8>,
     new_sample: f32) {
 
-    for &[a, b] in chain.windows(2) {
+    for pair in chain.windows(2) {
 
-        let a_follower = followers[a as usize].iter_mut()
-            .find(|f| f.follower_index == b)
-            .unwrap();
+        if let &[a, b] = pair {
 
-        rolling_average_update(&mut a_follower.average_chain_len_pair, new_sample);
+            let a_follower = followers[a as usize].iter_mut()
+                .find(|f| f.follower_index == b)
+                .unwrap();
+
+            rolling_average_update(&mut a_follower.average_chain_len_pair, new_sample);
+
+        } else {
+            panic!("Windowing function failed")
+        }
     }
 }
