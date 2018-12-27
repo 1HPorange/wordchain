@@ -38,6 +38,8 @@ fn find_longest_thread<R>(
 
     // One-time setup
     let mut average_chain_lens = vec![1f32; follower_table.len()]; // todo: see if we should use better estimate here
+    let mut average_chain_lens_sum = average_chain_lens.len() as f32;
+
     let mut chain: Vec<u8> = Vec::new(); // PERF: Guess size
     let mut chain_mask: U256;
 
@@ -70,6 +72,9 @@ fn find_longest_thread<R>(
 
         // Update starter average length
         rolling_average_update(&mut average_chain_lens[latest], chain_flen);
+
+        // Re-calculate sum of average chain lengths for starters
+        average_chain_lens_sum = average_chain_lens.iter().sum();
 
         // ... and the average length of each pair in the chain
         update_follower_averages(follower_table, &chain, chain_flen);
