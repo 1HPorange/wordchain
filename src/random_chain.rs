@@ -95,7 +95,14 @@ struct Follower {
 
 fn create_starter_table(connectivity_index_table: &Vec<Vec<u8>>) -> Vec<Follower> {
 
-
+    (0..=(connectivity_index_table.len()  as u8)).iter()
+        .map(|i| {
+            Follower {
+                follower_index: i,
+                average_chain_len_pair: 1f32
+            }
+        })
+        .collect()
 
 }
 
