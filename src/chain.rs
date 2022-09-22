@@ -1,60 +1,77 @@
-use std::cmp;
-use rayon::prelude::*;
 use super::{tasks, words};
-use uint::U256;
+use crate::U256;
+use rayon::prelude::*;
+use std::cmp;
 
 pub fn find_longest_chain_parallel(
     connectivity_index_table: &Vec<Vec<u8>>,
     sorted_words: &Vec<String>,
     granularity: Option<u8>,
-    verbose: bool) -> Vec<u8> {
-
+    verbose: bool,
+) -> Vec<u8> {
     let mut global_longest = Vec::new(); // MIN OPT: Guess length
 
     let mut longest_estimates: Vec<Option<u8>> = vec![None; connectivity_index_table.len()];
 
     for start_index in 0..connectivity_index_table.len() as u8 {
-
         // TODO: Think about the constant value here and what to pass instead
-        let mut chains = tasks::create_chain_tasks(start_index, &connectivity_index_table, granularity.unwrap_or(6));
+        let chains = tasks::create_chain_tasks(
+            start_index,
+            &connectivity_index_table,
+            granularity.unwrap_or(6),
+        );
 
-        let (local_longest, global_estimate) = chains.into_par_iter()
+        let (local_longest, global_estimate) = chains
+            .into_par_iter()
             .map(|c| {
-
                 if verbose {
                     let orig_chain = c.clone();
 
-                    let chain = find_partial_longest_chain(c, &longest_estimates, &connectivity_index_table);
-                    
-                    println!("Finished longest chain search for initial chain {}",
-                             words::pretty_format_index_chain(&sorted_words, &orig_chain));
+                    let chain = find_partial_longest_chain(
+                        c,
+                        &longest_estimates,
+                        &connectivity_index_table,
+                    );
+
+                    println!(
+                        "Finished longest chain search for initial chain {}",
+                        words::pretty_format_index_chain(&sorted_words, &orig_chain)
+                    );
 
                     chain
                 } else {
                     find_partial_longest_chain(c, &longest_estimates, &connectivity_index_table)
                 }
             })
-            .reduce(|| (Vec::new(), None), |(acc_longest, acc_estimate),(next_longest, next_estimate)| {
-                (if next_longest.len() > acc_longest.len() {
-                    next_longest
-                } else {
-                    acc_longest
-                }, cmp::max(next_estimate, acc_estimate))
-            });
+            .reduce(
+                || (Vec::new(), None),
+                |(acc_longest, acc_estimate), (next_longest, next_estimate)| {
+                    (
+                        if next_longest.len() > acc_longest.len() {
+                            next_longest
+                        } else {
+                            acc_longest
+                        },
+                        cmp::max(next_estimate, acc_estimate),
+                    )
+                },
+            );
 
-        longest_estimates[start_index as usize] = global_estimate.or(Some(local_longest.len() as u8));
+        longest_estimates[start_index as usize] =
+            global_estimate.or(Some(local_longest.len() as u8));
 
         if local_longest.len() > global_longest.len() {
             global_longest = local_longest;
         }
 
-        println!("Finished word {}/{} - Longest chain until now ({}): {}",
-                 start_index as u16 + 1,
-                 connectivity_index_table.len(),
-                 global_longest.len(),
-                 words::pretty_format_index_chain(&sorted_words, &global_longest));
-
-    };
+        println!(
+            "Finished word {}/{} - Longest chain until now ({}): {}",
+            start_index as u16 + 1,
+            connectivity_index_table.len(),
+            global_longest.len(),
+            words::pretty_format_index_chain(&sorted_words, &global_longest)
+        );
+    }
 
     global_longest
 }
@@ -62,9 +79,8 @@ pub fn find_longest_chain_parallel(
 fn find_partial_longest_chain(
     mut chain: Vec<u8>,
     longest_estimates: &Vec<Option<u8>>,
-    follower_table: &Vec<Vec<u8>>)
-    -> (Vec<u8>, Option<u8>) {
-
+    follower_table: &Vec<Vec<u8>>,
+) -> (Vec<u8>, Option<u8>) {
     let initial_len = chain.len();
 
     debug_assert!(initial_len > 0);
@@ -97,13 +113,15 @@ fn find_partial_longest_chain(
                 let can_be_longest = longest_estimates[*follower as usize]
                     .and_then(|est| est.checked_add(chain.len() as u8))
                     .map(|potential_len| {
-                        estimate_for_initial_chain = Some(cmp::max(potential_len, estimate_for_initial_chain.unwrap_or(0)));
+                        estimate_for_initial_chain = Some(cmp::max(
+                            potential_len,
+                            estimate_for_initial_chain.unwrap_or(0),
+                        ));
                         potential_len >= local_longest.len() as u8 // we have info about a record and this can maybe be the longest chain
                     })
                     .unwrap_or(true);
 
                 if can_be_longest && !chain_mask.bit(*follower as usize) {
-
                     chain.push(*follower);
                     chain_mask = chain_mask | U256::one() << *follower;
 
@@ -119,7 +137,6 @@ fn find_partial_longest_chain(
                 chain.pop();
 
                 if chain.len() < initial_len {
-
                     return (local_longest, estimate_for_initial_chain);
                 }
 
@@ -128,5 +145,5 @@ fn find_partial_longest_chain(
                 break;
             }
         }
-    };
+    }
 }

@@ -4,8 +4,8 @@ version = "0.1.0"
 authors = ["mweb"]
 
 [dependencies]
-clap = "2.32"
-uint = "0.4.1"
+clap = "3.2"
+uint = "0.9"
 rayon = "1.0.3"
-rand = "0.6.1"
+rand = { version = "0.8", features = ["small_rng"] }
 num_cpus = "1.9.0"
